@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, GitCompareArrows, Trash2, FileText } from 'lucide-react';
-import { bridge } from '../shared/bridge';
-import { productName, developer } from '../shared/product';
+import { bridge, isDesktop } from '../shared/bridge';
+import { productName, productVersion, developer } from '../shared/product';
 import { useAction, useApp } from '../shared/context';
 import { row, list, text, date, type Job } from '../shared/models';
 import { diffRecords, type Difference } from '../shared/diff';
 import {
+  Select,
   PageHeader,
   Card,
   Button,
@@ -82,24 +83,24 @@ export function HistoryPage() {
           }}
         >
           <Field label="调整前" className="grow">
-            <select required value={a} onChange={(e) => setA(e.target.value)}>
+            <Select required value={a} onValueChange={(selectedValue) => setA(selectedValue)}>
               <option value="">选择记录</option>
               {all.map((r) => (
                 <option key={text(r.id)} value={text(r.id)}>
                   {date(r.createdAt)} · {text(r.title)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="调整后" className="grow">
-            <select required value={b} onChange={(e) => setB(e.target.value)}>
+            <Select required value={b} onValueChange={(selectedValue) => setB(selectedValue)}>
               <option value="">选择记录</option>
               {all.map((r) => (
                 <option key={text(r.id)} value={text(r.id)}>
                   {date(r.createdAt)} · {text(r.title)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Button
             type="submit"
@@ -127,14 +128,18 @@ export function HistoryPage() {
       <Card
         title={`检测与修改记录 · ${rows.length}`}
         actions={
-          <select aria-label="历史记录类型" value={type} onChange={(e) => setType(e.target.value)}>
+          <Select
+            aria-label="历史记录类型"
+            value={type}
+            onValueChange={(selectedValue) => setType(selectedValue)}
+          >
             <option value="all">所有类型</option>
             {[...new Set(all.map((r) => text(r.type)))].map((t) => (
               <option key={t} value={t}>
                 {typeNames[t] ?? t}
               </option>
             ))}
-          </select>
+          </Select>
         }
       >
         <Table
@@ -197,7 +202,7 @@ export function TasksPage() {
     <>
       <PageHeader title="后台检测任务" description="任务由你手动启动；最小化到托盘后继续运行。" />
       <div className="tasks-summary">
-        <span className="status-dot pulse" />
+        <span className={`status-dot ${running.length ? 'pulse' : 'off'}`} />
         <strong>{running.length}</strong> 个正在运行的任务
         <span className="muted">· 同时最多 8 个</span>
       </div>
@@ -205,9 +210,12 @@ export function TasksPage() {
         app.jobs.map((job) => (
           <Card key={job.id}>
             <JobControl job={job} />
-            <div className="task-progress">
-              <span style={{ width: `${job.progress}%` }} />
-            </div>
+            <progress
+              className="task-progress"
+              value={job.progress}
+              max={100}
+              aria-label={`${job.title}进度`}
+            />
             <div className="task-meta">
               <span>开始于 {date(job.startedAt)}</span>
               <span>
@@ -234,66 +242,138 @@ export function TasksPage() {
 }
 export function SettingsPage() {
   const app = useApp(),
-    action = useAction();
+    action = useAction(),
+    windowAction = useAction();
   useEffect(() => {
     void action.run(() => bridge.call('meta'));
   }, []);
   const meta = row(action.data);
   return (
     <>
-      <PageHeader title="应用设置" description="界面与数据保留在本机，不需要云账号。" />
-      <div className="two-columns">
-        <Card title="外观">
-          <Field label="主题">
-            <select value={app.theme} onChange={(e) => app.setTheme(e.target.value)}>
-              <option value="system">跟随 Windows</option>
-              <option value="light">浅色</option>
-              <option value="dark">深色</option>
-            </select>
-          </Field>
-        </Card>
-        <Card title="后台运行">
-          <KeyValues
-            items={[
-              ['关闭窗口', '最小化到系统托盘'],
-              ['外网检测', '由你手动开始'],
-              ['后台通知', '任务完成或失败时提醒'],
-              ['退出应用', '托盘菜单 → 退出'],
-            ]}
-          />
-          <Button onClick={() => void bridge.window('tray')}>最小化到托盘</Button>
-          <Button variant="ghost" onClick={() => void bridge.window('quit')}>
-            退出应用
+      <PageHeader title="应用设置" />
+      {action.error && (
+        <Notice tone="error">
+          {action.error}{' '}
+          <Button busy={action.busy} onClick={() => void action.run(() => bridge.call('meta'))}>
+            重新读取
           </Button>
+        </Notice>
+      )}
+      <div className="settings-sections">
+        <Card title="外观" className="settings-section">
+          <div className="settings-body">
+            <Field label="主题">
+              <Select
+                value={app.theme}
+                onValueChange={(selectedValue) => {
+                  if (
+                    selectedValue === 'light' ||
+                    selectedValue === 'dark' ||
+                    selectedValue === 'system'
+                  )
+                    app.setTheme(selectedValue);
+                }}
+              >
+                <option value="system">跟随 Windows</option>
+                <option value="light">浅色</option>
+                <option value="dark">深色</option>
+              </Select>
+            </Field>
+          </div>
         </Card>
-        <Card title="本地数据">
-          <KeyValues
-            items={[
-              ['保存位置', text(meta.dataDirectory)],
-              ['历史记录上限', '500 条'],
-              ['路由器凭据', '可选择由 Windows 当前用户保护'],
-              ['遥测与云同步', '未启用'],
-            ]}
-          />
+        <Card title="后台运行" className="settings-section">
+          <div className="settings-body">
+            <Field
+              label="关闭窗口时"
+              hint={
+                app.closeBehavior === 'quit'
+                  ? '退出会等待后台任务和本机服务完成收尾。'
+                  : '后台检测会继续，可从托盘图标重新打开或退出。'
+              }
+            >
+              <Select
+                value={app.closeBehavior ?? 'tray'}
+                disabled={!isDesktop || app.closeBehavior === null || windowAction.busy}
+                onValueChange={(value) => {
+                  if (value === 'tray' || value === 'quit')
+                    void windowAction.run(() => app.setCloseBehavior(value));
+                }}
+              >
+                <option value="tray">进入托盘</option>
+                <option value="quit">退出应用</option>
+              </Select>
+            </Field>
+            <KeyValues
+              items={[
+                ['外网检测', '由你手动开始'],
+                ['后台通知', '任务完成或失败时提醒'],
+              ]}
+            />
+            <div className="button-row">
+              <Button
+                disabled={!isDesktop || windowAction.busy}
+                onClick={() => void windowAction.run(() => bridge.window('minimize'))}
+              >
+                最小化
+              </Button>
+              <Button
+                disabled={!isDesktop || windowAction.busy}
+                onClick={() => void windowAction.run(() => bridge.window('tray'))}
+              >
+                进入托盘
+              </Button>
+              <Button
+                disabled={!isDesktop || windowAction.busy}
+                variant="ghost"
+                onClick={() => void windowAction.run(() => bridge.window('quit'))}
+              >
+                退出应用
+              </Button>
+            </div>
+            <ErrorNotice error={windowAction.error} />
+            {!isDesktop && <p className="form-hint">窗口偏好与操作仅在 Windows 桌面应用中可用。</p>}
+          </div>
         </Card>
-        <Card title={`关于 ${productName}`}>
-          <KeyValues
-            items={[
-              ['版本', text(meta.version)],
-              ['开发者', developer],
-              ['支持系统', 'Windows 11 x64'],
-              ['首个路由器适配', '小米 AX3000T · RD03 · CN · 1.0.84'],
-              ['Packet Monitor', meta.captureAvailable ? '系统已提供' : '当前系统不可用'],
-            ]}
-          />
-          <Button
-            onClick={() =>
-              void action.run(() => bridge.openExternal('ms-settings:privacy-location'))
-            }
-          >
-            打开 Windows 位置权限设置
-          </Button>
-          <ErrorNotice error={action.error} />
+        <Card title="本地数据" className="settings-section">
+          <div className="settings-body">
+            <KeyValues
+              items={[
+                ['保存位置', text(meta.dataDirectory, action.busy ? '正在读取…' : '未读取')],
+                ['历史记录上限', '500 条'],
+                ['路由器凭据', '可选择由 Windows 当前用户保护'],
+                ['遥测与云同步', '未启用'],
+              ]}
+            />
+          </div>
+        </Card>
+        <Card title={`关于 ${productName}`} className="settings-section">
+          <div className="settings-body">
+            <KeyValues
+              items={[
+                ['版本', productVersion],
+                ['开发者', developer],
+                ['支持系统', 'Windows 11 x64'],
+                ['首个路由器适配', '小米 AX3000T · RD03 · CN · 1.0.84'],
+                [
+                  'Packet Monitor',
+                  typeof meta.captureAvailable === 'boolean'
+                    ? meta.captureAvailable
+                      ? '系统已提供'
+                      : '当前系统不可用'
+                    : action.busy
+                      ? '正在读取…'
+                      : '未读取',
+                ],
+              ]}
+            />
+            <Button
+              onClick={() =>
+                void windowAction.run(() => bridge.openExternal('ms-settings:privacy-location'))
+              }
+            >
+              打开 Windows 位置权限设置
+            </Button>
+          </div>
         </Card>
       </div>
     </>

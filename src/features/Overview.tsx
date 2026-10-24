@@ -55,7 +55,6 @@ export function OverviewPage() {
     <>
       <PageHeader
         title="网络总览"
-        description="查看当前连接，以及这台电脑正在发生的网络活动。"
         actions={
           <Button
             busy={action.busy}
@@ -67,7 +66,19 @@ export function OverviewPage() {
         }
       />
       {!o ? (
-        <Empty title="正在读取本机网络" description="连接信息来自 Windows 当前配置。" />
+        <Empty
+          title={app.overviewError ? '本机网络读取失败' : '正在读取本机网络'}
+          description={
+            app.overviewError
+              ? '检查本机服务后重新读取连接信息。'
+              : '连接信息来自 Windows 当前配置。'
+          }
+          action={
+            app.overviewError ? (
+              <Button onClick={() => void app.refresh()}>重新读取</Button>
+            ) : undefined
+          }
+        />
       ) : (
         <>
           <div className="connection-card">

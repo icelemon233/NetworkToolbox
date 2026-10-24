@@ -13,6 +13,7 @@ module.exports = async function afterPack(context) {
     await fs.readFile(path.join(project, 'desktop/product.json'), 'utf8'),
   );
   if (
+    manifest.variant !== 'network-analyzer' ||
     manifest.version !== metadata.version ||
     manifest.product !== metadata.build.productName ||
     identity.version !== metadata.version ||
@@ -20,6 +21,15 @@ module.exports = async function afterPack(context) {
     identity.developer !== metadata.author
   ) {
     throw new Error('Product resources are stale. Run pnpm build before packaging.');
+  }
+  for (const [name, expected] of [
+    [manifest.source, manifest.sourceSha256],
+    [manifest.master, manifest.masterSha256],
+  ]) {
+    const digest = createHash('sha256')
+      .update(await fs.readFile(path.join(project, 'assets', name)))
+      .digest('hex');
+    if (digest !== expected) throw new Error(`Brand source ${name} is stale. Run pnpm assets.`);
   }
   for (const [name, expected] of Object.entries(manifest.files)) {
     const digest = createHash('sha256')

@@ -4,6 +4,7 @@ import { bridge } from '../shared/bridge';
 import { useAction, useApp, useJob } from '../shared/context';
 import { row, list, text, number, formatBytes } from '../shared/models';
 import {
+  Select,
   PageHeader,
   Card,
   Button,
@@ -205,15 +206,15 @@ export function ConnectionsPage() {
               <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />每
               5 秒刷新
             </label>
-            <select
+            <Select
               aria-label="协议筛选"
               value={protocol}
-              onChange={(e) => setProtocol(e.target.value)}
+              onValueChange={(selectedValue) => setProtocol(selectedValue)}
             >
               <option value="all">所有协议</option>
               <option>TCP</option>
               <option>UDP</option>
-            </select>
+            </Select>
             <label className="search-input">
               <Search size={14} />
               <input

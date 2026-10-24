@@ -10,9 +10,11 @@
 
 [下载 Windows 版本](https://github.com/icelemon233/NetworkToolbox/releases/latest)。
 
-- `NetworkToolbox-0.2.0-Portable.exe`：直接运行，无需安装 Node.js 或 .NET。
-- `NetworkToolbox-Setup-0.2.0.exe`：安装版，可选择安装目录。
-- 关闭窗口会进入托盘；在应用设置或托盘菜单中选择“退出”。
+此分支为 v0.2.2，目前已发布的安装包为 v0.2.0；使用新版界面需从源码构建。
+
+- `NetworkToolbox-<版本>-Portable.exe`：直接运行，无需安装 Node.js 或 .NET。
+- `NetworkToolbox-Setup-<版本>.exe`：安装版，可选择安装目录。
+- 默认关闭窗口会进入托盘；v0.2.2 可在设置中改为关闭时退出。在应用设置或托盘菜单中选择“退出”可结束应用。
 
 打开应用会读取本机连接和 Windows 缓存。附近热点主动扫描、外网测试、设备发现与后台监测均由用户手动开始。
 
@@ -35,9 +37,9 @@
 
 ## 读取与修改的边界
 
-![浅色主题下的 Windows 应用](docs/interface-light.png)
+![浅色主题下的 Windows 只读预览与 DNS 查询界面](docs/interface-light.png)
 
-截图来自实际运行的 Windows 程序；子网计算使用文档示例地址。
+截图来自 Windows 只读预览，显示尚未开始检测的 DNS 查询界面。
 
 新版 Windows 可能要求位置服务和桌面应用位置授权，才允许扫描附近 Wi-Fi。应用会报告被拒绝的情况，不能用管理员权限替代位置授权。
 

@@ -44,6 +44,16 @@ export const bridge: Bridge = {
   },
   async window(action) {
     if (window.networkToolbox) return window.networkToolbox.window(action);
+    throw new Error('窗口操作仅在 Windows 桌面应用中可用');
+  },
+  async getWindowPreferences() {
+    if (window.networkToolbox) return window.networkToolbox.getWindowPreferences();
+    return { theme: 'system', closeBehavior: 'tray' };
+  },
+  async setWindowPreferences(preferences) {
+    if (window.networkToolbox) return window.networkToolbox.setWindowPreferences(preferences);
+    return { theme: 'system', closeBehavior: 'tray' };
   },
 };
 export const isPreview = preview;
+export const isDesktop = Boolean(window.networkToolbox);

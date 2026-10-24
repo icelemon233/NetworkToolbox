@@ -1,4 +1,10 @@
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import {
+  cloneElement,
+  isValidElement,
+  useId,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from 'react';
 import {
   AlertCircle,
   ChevronRight,
@@ -13,6 +19,8 @@ import {
 import { bridge } from './bridge';
 import { useApp, useAction } from './context';
 import { row, list, text, date, type Job } from './models';
+import { useModalDialog } from './dialog';
+export { Select } from './Select';
 export function Button({
   children,
   variant = 'secondary',
@@ -26,6 +34,7 @@ export function Button({
     <button
       {...props}
       disabled={busy || props.disabled}
+      aria-busy={busy || undefined}
       className={`button ${variant} ${props.className ?? ''}`}
     >
       {busy && <LoaderCircle size={15} className="spin" />}
@@ -39,16 +48,16 @@ export function PageHeader({
   actions,
 }: {
   title: string;
-  description: string;
+  description?: string;
   actions?: ReactNode;
 }) {
   return (
     <header className="page-header">
       <div>
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description && <p>{description}</p>}
       </div>
-      <div className="header-actions">{actions}</div>
+      {actions && <div className="header-actions">{actions}</div>}
     </header>
   );
 }
@@ -165,32 +174,82 @@ export function Field({
   children: ReactNode;
   className?: string;
 }) {
+  const id = useId();
+  const child = isValidElement<{
+    id?: string;
+    'aria-labelledby'?: string;
+    'aria-describedby'?: string;
+  }>(children)
+    ? children
+    : null;
+  const controlId = child?.props.id ?? `${id}-control`;
+  const labelId = `${id}-label`;
+  const hintId = `${id}-hint`;
   return (
-    <label className={`field ${className}`}>
-      <span>{label}</span>
-      {children}
-      {hint && <small>{hint}</small>}
-    </label>
+    <div className={`field ${className}`}>
+      <label id={labelId} htmlFor={controlId}>
+        {label}
+      </label>
+      {child
+        ? cloneElement(child, {
+            id: controlId,
+            'aria-labelledby': child.props['aria-labelledby'] ?? labelId,
+            'aria-describedby':
+              [child.props['aria-describedby'], hint && hintId].filter(Boolean).join(' ') ||
+              undefined,
+          })
+        : children}
+      {hint && <small id={hintId}>{hint}</small>}
+    </div>
   );
+}
+export function tabLabelId(panelId: string, value: string) {
+  return `${panelId}-${encodeURIComponent(value)}`;
 }
 export function Tabs({
   items,
   value,
   onChange,
+  label = '工具选项',
+  panelId,
 }: {
   items: { id: string; label: string }[];
   value: string;
   onChange: (v: string) => void;
+  label?: string;
+  panelId?: string;
 }) {
   return (
-    <div className="tabs" role="tablist">
-      {items.map((i) => (
+    <div className="tabs" role="tablist" aria-label={label}>
+      {items.map((i, index) => (
         <button
           key={i.id}
           role="tab"
+          type="button"
+          id={panelId ? tabLabelId(panelId, i.id) : undefined}
+          aria-controls={panelId}
           aria-selected={i.id === value}
+          tabIndex={i.id === value ? 0 : -1}
           className={i.id === value ? 'active' : ''}
           onClick={() => onChange(i.id)}
+          onKeyDown={(event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const nextIndex =
+              event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? items.length - 1
+                  : (index + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
+            const next = items[nextIndex];
+            if (!next) return;
+            onChange(next.id);
+            const buttons =
+              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                '[role="tab"]',
+              );
+            buttons?.[nextIndex]?.focus();
+          }}
         >
           {i.label}
         </button>
@@ -249,7 +308,12 @@ export function Table({
   rowKey?: string;
 }) {
   return (
-    <div className="table-scroll">
+    <div
+      className="table-scroll"
+      tabIndex={0}
+      role="region"
+      aria-label={`数据表格：${columns.map((c) => c.title).join('、')}`}
+    >
       <table>
         <thead>
           <tr>
@@ -293,7 +357,9 @@ export function JobControl({ job }: { job?: Job }) {
       {job && (
         <div className="job-strip">
           <div>
-            <span className={`status-dot ${job.state === 'running' ? 'pulse' : ''}`} />
+            <span
+              className={`status-dot ${{ running: 'pulse', completed: 'good', failed: 'bad', cancelled: 'off' }[job.state]}`}
+            />
             <strong>{job.title}</strong>
             <span>
               {
@@ -325,21 +391,19 @@ export function PlanDialog({
   scope,
   onClose,
   onApplied,
+  returnFocus,
 }: {
   plan: unknown;
   scope: 'config' | 'router';
   onClose: () => void;
   onApplied?: () => void;
+  returnFocus?: HTMLElement | null;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useModalDialog(true, returnFocus);
+  const titleId = useId();
   const action = useAction();
   const { notify } = useApp();
   const p = row(plan);
-  useEffect(() => {
-    const el = dialog.current;
-    el?.showModal();
-    return () => el?.close();
-  }, []);
   const summary = row(p.summary);
   const before = row(scope === 'config' ? p.before : summary.before);
   const after = row(scope === 'config' ? p.desired : summary.after);
@@ -411,6 +475,8 @@ export function PlanDialog({
     <dialog
       ref={dialog}
       className="plan-dialog"
+      aria-labelledby={titleId}
+      aria-busy={action.busy || undefined}
       onCancel={(event) => {
         event.preventDefault();
         if (!action.busy) onClose();
@@ -421,7 +487,7 @@ export function PlanDialog({
           <ShieldCheck size={22} />
         </span>
         <div>
-          <h2>检查将要应用的修改</h2>
+          <h2 id={titleId}>检查将要应用的修改</h2>
           <p>
             {scope === 'router' ? '仅提交本次预览的路由器设置' : '修改前会自动保存可恢复的配置快照'}
           </p>

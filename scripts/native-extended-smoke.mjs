@@ -11,6 +11,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 const require = createRequire(import.meta.url);
 const { NativeClient } = require('../desktop/native-client.cjs');
 const root = path.resolve(import.meta.dirname, '..');
+const metadata = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
 const dataDirectory = path.join(root, '.runtime', 'extended-' + Date.now());
 const client = new NativeClient({ root, dataDirectory });
 const completed = new Map();
@@ -59,7 +60,7 @@ let originalProxy, restoreId;
 try {
   await check('published native identity', async () => {
     const meta = await client.call('meta');
-    assert.equal(meta.version, '0.2.0');
+    assert.equal(meta.version, metadata.version);
     assert.equal(meta.admin, false);
   });
   await check('live loopback HTTP, TCP ports and private-history redaction', async () => {

@@ -27,6 +27,20 @@ try {
   await client.close();
 }
 const packedFile = path.join(root, 'release/win-unpacked/resources/app.asar');
+async function verifyRenderer(directory) {
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) await verifyRenderer(file);
+    else {
+      const relative = path.relative(root, file);
+      assert.ok(
+        (await fs.readFile(file)).equals(asar.extractFile(packedFile, relative)),
+        `${relative} in ASAR differs from the current renderer build`,
+      );
+    }
+  }
+}
+await verifyRenderer(path.join(root, 'dist'));
 const removal = await fs.readFile(path.join(root, 'desktop/installer-files.nsh'), 'utf8');
 async function verifyRemoval(directory) {
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
@@ -43,11 +57,23 @@ async function verifyRemoval(directory) {
 }
 await verifyRemoval(path.join(root, 'release/win-unpacked'));
 const identity = JSON.parse(asar.extractFile(packedFile, 'desktop/product.json'));
+const generatedIdentity = JSON.parse(
+  await fs.readFile(path.join(root, 'desktop/product.json'), 'utf8'),
+);
 assert.deepEqual(identity, {
   productName: source.build.productName,
   version: source.version,
   developer: source.author,
+  windowTheme: generatedIdentity.windowTheme,
 });
+for (const name of ['main.cjs', 'preload.cjs', 'native-client.cjs', 'window-preferences.cjs']) {
+  assert.ok(
+    (await fs.readFile(path.join(root, 'desktop', name))).equals(
+      asar.extractFile(packedFile, `desktop/${name}`),
+    ),
+    `desktop/${name} in ASAR differs from the current host`,
+  );
+}
 for (const name of ['icon.png', 'icon.ico', 'tray.png']) {
   assert.ok(
     (await fs.readFile(path.join(root, 'assets', name))).equals(
@@ -59,9 +85,22 @@ for (const name of ['icon.png', 'icon.ico', 'tray.png']) {
 assert.ok(
   !asar
     .listPackage(packedFile)
-    .some((name) => name.includes('portrait-source') || name.includes('installer-files')),
+    .some(
+      (name) =>
+        name.includes('portrait-source') ||
+        name.includes('network-source') ||
+        name.includes('installer-files'),
+    ),
 );
 const ico = await fs.readFile(path.join(root, 'assets/icon.ico'));
+assert.ok(
+  ico.equals(
+    await fs.readFile(
+      path.join(root, 'release/win-unpacked/resources', `app-icon-${source.version}.ico`),
+    ),
+  ),
+  'Versioned shortcut icon differs from the confirmed artwork',
+);
 const count = ico.readUInt16LE(4);
 const layers = Array.from({ length: count }, (_, i) => {
   const entry = 6 + i * 16;

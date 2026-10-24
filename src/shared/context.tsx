@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { bridge } from './bridge';
 import { row, text, type Overview, type WifiScan, type Job } from './models';
+import { readTheme, savePreference, type Theme, type CloseBehavior } from './preferences';
 interface AppState {
   overview: Overview | null;
   wifi: WifiScan | null;
@@ -16,6 +17,7 @@ interface AppState {
   scan: () => Promise<void>;
   scanning: boolean;
   error: string;
+  overviewError: string;
   setError: (e: string) => void;
   jobs: Job[];
   samples: Record<string, unknown[]>;
@@ -25,8 +27,10 @@ interface AppState {
   adapterId: string;
   setAdapterId: (id: string) => void;
   rates: { time: number; down: number; up: number }[];
-  theme: string;
-  setTheme: (s: string) => void;
+  theme: Theme;
+  setTheme: (s: Theme) => void;
+  closeBehavior: CloseBehavior | null;
+  setCloseBehavior: (s: CloseBehavior) => Promise<void>;
 }
 const Context = createContext<AppState | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -34,13 +38,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [wifi, setWifi] = useState<WifiScan | null>(null),
     [scanning, setScanning] = useState(false),
     [error, setError] = useState(''),
+    [overviewError, setOverviewError] = useState(''),
     [jobs, setJobs] = useState<Job[]>([]),
     [samples, setSamples] = useState<Record<string, unknown[]>>({}),
     [toast, setToast] = useState(''),
     [page, setPage] = useState('overview'),
     [adapterId, setAdapterId] = useState(''),
     [rates, setRates] = useState<{ time: number; down: number; up: number }[]>([]),
-    [theme, setTheme] = useState(() => localStorage.getItem('theme') ?? 'system');
+    [theme, setTheme] = useState<Theme>(readTheme),
+    [closeBehavior, setCloseBehaviorState] = useState<CloseBehavior | null>(null);
   const selected = useRef(adapterId);
   selected.current = adapterId;
   const previous = useRef<{ id: string; time: number; down: number; up: number } | null>(null);
@@ -55,12 +61,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const next = await bridge.call<Overview>('overview');
       if (!mounted.current) return;
       setOverview(next);
+      setOverviewError('');
       const adapter =
         next.adapters.find((a) => a.id === selected.current) ??
         next.adapters.find((a) => a.status === 'Up' && a.gateways.length > 0) ??
         next.adapters[0];
       if (adapter) {
-        if (!selected.current) setAdapterId(adapter.id);
+        if (selected.current !== adapter.id) setAdapterId(adapter.id);
         const now = Date.now(),
           last = previous.current;
         if (
@@ -88,9 +95,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           down: adapter.receivedBytes ?? 0,
           up: adapter.sentBytes ?? 0,
         };
+      } else {
+        setAdapterId('');
+        previous.current = null;
       }
     } catch (e) {
-      if (mounted.current) setError(e instanceof Error ? e.message : '读取本机网络失败');
+      if (mounted.current) setOverviewError(e instanceof Error ? e.message : '读取本机网络失败');
     }
   }, []);
   const scan = useCallback(async () => {
@@ -149,15 +159,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [toast]);
   useEffect(() => {
-    localStorage.setItem('theme', theme);
+    if (!savePreference('theme', theme))
+      setError('主题已切换，但无法保存偏好。请检查本机存储是否可用。');
     const mq = matchMedia('(prefers-color-scheme: dark)');
     const apply = () =>
       (document.documentElement.dataset.theme =
         theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme);
     apply();
+    void bridge.setWindowPreferences({ theme }).catch((e: unknown) => {
+      if (mounted.current) setError(e instanceof Error ? e.message : '窗口主题同步失败');
+    });
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
   }, [theme]);
+  useEffect(() => {
+    let current = true;
+    void bridge
+      .getWindowPreferences()
+      .then((preferences) => {
+        if (!current) return;
+        setCloseBehaviorState(preferences.closeBehavior);
+        if (preferences.error) setError(preferences.error);
+      })
+      .catch((e: unknown) => {
+        if (current) setError(e instanceof Error ? e.message : '窗口偏好读取失败');
+      });
+    return () => {
+      current = false;
+    };
+  }, []);
+  async function setCloseBehavior(value: CloseBehavior) {
+    const preferences = await bridge.setWindowPreferences({ closeBehavior: value });
+    setCloseBehaviorState(preferences.closeBehavior);
+  }
   const go = (p: string) => {
     setPage(p);
     setError('');
@@ -171,6 +205,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         scan,
         scanning,
         error,
+        overviewError,
         setError,
         jobs,
         samples,
@@ -182,6 +217,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         rates,
         theme,
         setTheme,
+        closeBehavior,
+        setCloseBehavior,
       }}
     >
       {children}

@@ -4,11 +4,13 @@ import { bridge } from '../shared/bridge';
 import { useApp, useAction, useJob } from '../shared/context';
 import { row, list, text, number } from '../shared/models';
 import {
+  Select,
   PageHeader,
   Card,
   Button,
   Field,
   Tabs,
+  tabLabelId,
   Metric,
   Notice,
   ErrorNotice,
@@ -25,11 +27,10 @@ export function DiagnosticsPage() {
   const [tab, setTab] = useState('ping');
   return (
     <>
-      <PageHeader
-        title="连通性诊断"
-        description="从本机到指定目标，逐项检查延迟、路径与应用连接。"
-      />
+      <PageHeader title="连通性诊断" />
       <Tabs
+        label="诊断类型"
+        panelId="diagnostics-panel"
         value={tab}
         onChange={setTab}
         items={[
@@ -39,15 +40,21 @@ export function DiagnosticsPage() {
           { id: 'ports', label: '端口检测' },
         ]}
       />
-      {tab === 'ping' ? (
-        <PingTool />
-      ) : tab === 'trace' ? (
-        <TraceTool />
-      ) : tab === 'web' ? (
-        <WebTool />
-      ) : (
-        <PortTool />
-      )}
+      <div
+        role="tabpanel"
+        id="diagnostics-panel"
+        aria-labelledby={tabLabelId('diagnostics-panel', tab)}
+      >
+        {tab === 'ping' ? (
+          <PingTool />
+        ) : tab === 'trace' ? (
+          <TraceTool />
+        ) : tab === 'web' ? (
+          <WebTool />
+        ) : (
+          <PortTool />
+        )}
+      </div>
     </>
   );
 }
@@ -99,11 +106,14 @@ function PingTool() {
             />
           </Field>
           <Field label="间隔">
-            <select value={interval} onChange={(e) => setInterval(Number(e.target.value))}>
+            <Select
+              value={interval}
+              onValueChange={(selectedValue) => setInterval(Number(selectedValue))}
+            >
               <option value={500}>500 ms</option>
               <option value={1000}>1 秒</option>
               <option value={3000}>3 秒</option>
-            </select>
+            </Select>
           </Field>
           <Button type="submit" variant="primary" busy={action.busy}>
             <StartIcon />
@@ -480,14 +490,15 @@ export function DnsPage() {
             <input required value={domain} onChange={(e) => setDomain(e.target.value)} />
           </Field>
           <Field label="记录类型">
-            <select value={type} onChange={(e) => setType(e.target.value)}>
+            <Select value={type} onValueChange={(selectedValue) => setType(selectedValue)}>
               {['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA'].map((t) => (
                 <option key={t}>{t}</option>
               ))}
-            </select>
+            </Select>
           </Field>
-          <Field label="DNS 服务器" className="grow" hint="留空使用当前网卡配置；最多 6 个 IP">
+          <Field label="DNS 服务器" className="grow">
             <input
+              aria-describedby="dns-server-hint"
               value={servers}
               onChange={(e) => setServers(e.target.value)}
               placeholder="223.5.5.5, 1.1.1.1"
@@ -498,6 +509,9 @@ export function DnsPage() {
             查询对比
           </Button>
         </form>
+        <p className="form-hint" id="dns-server-hint">
+          DNS 服务器留空使用当前网卡配置；最多填写 6 个 IP。
+        </p>
         <ErrorNotice error={action.error} />
       </Card>
       {results.length > 0 ? (

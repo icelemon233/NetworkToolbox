@@ -4,11 +4,13 @@ import { bridge } from '../shared/bridge';
 import { useAction, useJob } from '../shared/context';
 import { row, list, text, number } from '../shared/models';
 import {
+  Select,
   PageHeader,
   Card,
   Button,
   Field,
   Tabs,
+  tabLabelId,
   Metric,
   Notice,
   ErrorNotice,
@@ -25,6 +27,8 @@ export function SpeedPage() {
     <>
       <PageHeader title="网络测速" description="测量实际传输能力，并观察传输时延迟如何变化。" />
       <Tabs
+        label="测速方式"
+        panelId="speed-panel"
         value={tab}
         onChange={setTab}
         items={[
@@ -32,7 +36,9 @@ export function SpeedPage() {
           { id: 'lan', label: '局域网对测' },
         ]}
       />
-      {tab === 'internet' ? <InternetSpeed /> : <LanSpeed />}
+      <div role="tabpanel" id="speed-panel" aria-labelledby={tabLabelId('speed-panel', tab)}>
+        {tab === 'internet' ? <InternetSpeed /> : <LanSpeed />}
+      </div>
     </>
   );
 }
@@ -71,13 +77,13 @@ function InternetSpeed() {
             <input type="url" required value={server} onChange={(e) => setServer(e.target.value)} />
           </Field>
           <Field label="下载数据量">
-            <select value={size} onChange={(e) => setSize(Number(e.target.value))}>
+            <Select value={size} onValueChange={(selectedValue) => setSize(Number(selectedValue))}>
               {[16, 32, 64, 128].map((n) => (
                 <option key={n} value={n}>
                   {n} MB
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Button
             variant="primary"
@@ -271,19 +277,25 @@ function LanSpeed() {
             </Field>
             <div className="two-fields">
               <Field label="传输方向">
-                <select value={direction} onChange={(e) => setDirection(e.target.value)}>
+                <Select
+                  value={direction}
+                  onValueChange={(selectedValue) => setDirection(selectedValue)}
+                >
                   <option value="upload">本机 → 接收端</option>
                   <option value="download">接收端 → 本机</option>
-                </select>
+                </Select>
               </Field>
               <Field label="数据量">
-                <select value={size} onChange={(e) => setSize(Number(e.target.value))}>
+                <Select
+                  value={size}
+                  onValueChange={(selectedValue) => setSize(Number(selectedValue))}
+                >
                   {[16, 32, 64, 128, 256].map((n) => (
                     <option key={n} value={n}>
                       {n} MB
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </div>
             <Button variant="primary" busy={action.busy} type="submit">

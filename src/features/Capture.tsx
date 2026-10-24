@@ -4,6 +4,7 @@ import { bridge } from '../shared/bridge';
 import { useAction } from '../shared/context';
 import { row, list, text, number, formatBytes, date } from '../shared/models';
 import {
+  Select,
   PageHeader,
   Card,
   Button,
@@ -46,9 +47,9 @@ export function CapturePage() {
       <Card title="本机接口捕获" caption="仅捕获网卡组件，使用循环日志限制磁盘占用。">
         <div className="toolbar">
           <Field label="最大原始日志大小">
-            <select
+            <Select
               value={maxMb}
-              onChange={(e) => setMaxMb(Number(e.target.value))}
+              onValueChange={(selectedValue) => setMaxMb(Number(selectedValue))}
               disabled={running}
             >
               {[32, 64, 128, 256].map((n) => (
@@ -56,7 +57,7 @@ export function CapturePage() {
                   {n} MB
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           {running ? (
             <Button

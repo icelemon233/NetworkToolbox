@@ -10,11 +10,13 @@ A Windows network toolbox for Wi-Fi channel analysis, connection diagnostics, th
 
 [Download the Windows release](https://github.com/icelemon233/NetworkToolbox/releases/latest).
 
+This branch contains v0.2.2. The published package is currently v0.2.0; build from source to use the updated interface.
+
 Windows 11 x64 is required. The portable application and installer include Electron and a self-contained .NET worker; end users do not need Node.js or a .NET installation.
 
-- `NetworkToolbox-0.2.0-Portable.exe`: run directly.
-- `NetworkToolbox-Setup-0.2.0.exe`: install with a choice of destination.
-- Closing the window keeps tasks in the tray. Choose **退出应用** in settings or **退出** in the tray menu to exit.
+- `NetworkToolbox-<version>-Portable.exe`: run directly.
+- `NetworkToolbox-Setup-<version>.exe`: install with a choice of destination.
+- Closing the window keeps tasks in the tray by default. In v0.2.2, settings also offer exit on close. Choose **退出应用** in settings or **退出** in the tray menu to exit.
 
 Opening the app reads local interfaces and the Windows Wi-Fi cache. Active Wi-Fi scans, Internet tests, subnet discovery and background monitoring start when requested.
 
@@ -35,9 +37,9 @@ Opening the app reads local interfaces and the Windows Wi-Fi cache. Active Wi-Fi
 
 ## Measurement and permissions
 
-![Windows application in the light theme](docs/interface-light.png)
+![Light-theme DNS query page in the Windows read-only preview](docs/interface-light.png)
 
-The running Windows application, with a documentation-range subnet as the calculator input.
+The read-only Windows preview, showing the DNS query page before a test starts.
 
 New Windows versions may require location services and desktop-app location permission for nearby Wi-Fi scans. The app reports denied access; administrator rights do not replace that permission.
 

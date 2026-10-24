@@ -71,6 +71,11 @@ export interface NativeEvent {
   name: string;
   data: unknown;
 }
+export interface WindowPreferences {
+  theme: 'system' | 'light' | 'dark';
+  closeBehavior: 'tray' | 'quit';
+  error?: string;
+}
 export interface Bridge {
   call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
   onEvent(callback: (event: NativeEvent) => void): () => void;
@@ -80,6 +85,10 @@ export interface Bridge {
   ): Promise<{ saved?: boolean; cancelled?: boolean; path?: string }>;
   openExternal(url: string): Promise<void>;
   window(action: 'minimize' | 'tray' | 'quit'): Promise<void>;
+  getWindowPreferences(): Promise<WindowPreferences>;
+  setWindowPreferences(
+    preferences: Partial<Pick<WindowPreferences, 'theme' | 'closeBehavior'>>,
+  ): Promise<WindowPreferences>;
 }
 declare global {
   interface Window {

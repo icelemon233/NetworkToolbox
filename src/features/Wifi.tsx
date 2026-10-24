@@ -4,11 +4,13 @@ import { bridge } from '../shared/bridge';
 import { useApp, useAction, useJob } from '../shared/context';
 import { row, list, number, text, date } from '../shared/models';
 import {
+  Select,
   PageHeader,
   Card,
   Button,
   Metric,
   Tabs,
+  tabLabelId,
   Table,
   Notice,
   ErrorNotice,
@@ -106,37 +108,41 @@ export function WifiPage() {
         }
         actions={
           <Tabs
+            label="无线频段"
+            panelId="wifi-panel"
             items={['2.4 GHz', '5 GHz', '6 GHz'].map((v) => ({ id: v, label: v }))}
             value={band}
             onChange={setBand}
           />
         }
       >
-        {!networks.length ? (
-          <Empty
-            title={band === '6 GHz' ? '未扫描到 6 GHz 网络' : '此频段暂无扫描记录'}
-            description={
-              band === '6 GHz'
-                ? '需要网卡、驱动、地区和接入点共同支持；无记录不代表附近不存在。'
-                : '点击“刷新扫描”，并确认 Windows 位置权限已允许。'
-            }
-          />
-        ) : band === '2.4 GHz' ? (
-          <ChannelChart networks={networks} min={2400} max={2490} title="2.4 GHz · 信道 1–13" />
-        ) : band === '5 GHz' ? (
-          <div className="spectrum-groups">
-            <ChannelChart networks={networks} min={5170} max={5330} title="5 GHz · 36–64" />
-            {networks.some((n) => n.channel >= 100 && n.channel <= 144) && (
-              <ChannelChart networks={networks} min={5490} max={5730} title="5 GHz · 100–144" />
-            )}
-            <ChannelChart networks={networks} min={5735} max={5835} title="5 GHz · 149–165" />
-          </div>
-        ) : (
-          <Notice>
-            已读取到 6 GHz
-            热点。当前版本保留热点表中的实测频率；缺少可解析广播频宽时不绘制假定范围。
-          </Notice>
-        )}
+        <div role="tabpanel" id="wifi-panel" aria-labelledby={tabLabelId('wifi-panel', band)}>
+          {!networks.length ? (
+            <Empty
+              title={band === '6 GHz' ? '未扫描到 6 GHz 网络' : '此频段暂无扫描记录'}
+              description={
+                band === '6 GHz'
+                  ? '需要网卡、驱动、地区和接入点共同支持；无记录不代表附近不存在。'
+                  : '点击“刷新扫描”，并确认 Windows 位置权限已允许。'
+              }
+            />
+          ) : band === '2.4 GHz' ? (
+            <ChannelChart networks={networks} min={2400} max={2490} title="2.4 GHz · 信道 1–13" />
+          ) : band === '5 GHz' ? (
+            <div className="spectrum-groups">
+              <ChannelChart networks={networks} min={5170} max={5330} title="5 GHz · 36–64" />
+              {networks.some((n) => n.channel >= 100 && n.channel <= 144) && (
+                <ChannelChart networks={networks} min={5490} max={5730} title="5 GHz · 100–144" />
+              )}
+              <ChannelChart networks={networks} min={5735} max={5835} title="5 GHz · 149–165" />
+            </div>
+          ) : (
+            <Notice>
+              已读取到 6 GHz
+              热点。当前版本保留热点表中的实测频率；缺少可解析广播频宽时不绘制假定范围。
+            </Notice>
+          )}
+        </div>
       </Card>
       {scan?.refreshed && best && band === '5 GHz' && (
         <div className="recommendation">
@@ -173,14 +179,14 @@ export function WifiPage() {
                 onChange={(e) => setQuery(e.target.value)}
               />
             </label>
-            <select
+            <Select
               aria-label="无线网络排序"
               value={sort}
-              onChange={(e) => setSort(e.target.value)}
+              onValueChange={(selectedValue) => setSort(selectedValue)}
             >
               <option value="signal">按信号强度</option>
               <option value="channel">按信道</option>
-            </select>
+            </Select>
           </div>
         }
       >

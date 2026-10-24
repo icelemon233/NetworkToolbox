@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Router,
   LockKeyhole,
@@ -12,6 +12,7 @@ import { bridge } from '../shared/bridge';
 import { useApp, useAction } from '../shared/context';
 import { row, list, text, number } from '../shared/models';
 import {
+  Select,
   PageHeader,
   Card,
   Button,
@@ -27,6 +28,7 @@ import {
   Badge,
 } from '../shared/ui';
 export function RouterPage() {
+  const planTrigger = useRef<HTMLElement | null>(null);
   const app = useApp(),
     action = useAction();
   const [info, setInfo] = useState<Record<string, unknown>>({}),
@@ -60,6 +62,8 @@ export function RouterPage() {
     if (connected) void load();
   }, [tab, connected]);
   async function prepare(actionName: string, desired: Record<string, unknown>) {
+    planTrigger.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const result = await action.run(() =>
       bridge.call('router.plan', { action: actionName, desired }),
     );
@@ -266,6 +270,7 @@ export function RouterPage() {
       {plan !== null && (
         <PlanDialog
           plan={plan}
+          returnFocus={planTrigger.current}
           scope="router"
           onClose={() => setPlan(null)}
           onApplied={() => {
@@ -331,10 +336,10 @@ function RadioSettings({
         </Field>
         <div className="two-fields">
           <Field label="信道">
-            <select
+            <Select
               value={channel}
-              onChange={(e) => {
-                const next = Number(e.target.value);
+              onValueChange={(selectedValue) => {
+                const next = Number(selectedValue);
                 setChannel(next);
                 const candidate = options.find((c) => number(c.c) === next);
                 if (bandwidth !== 0 && !list(candidate?.b).includes(bandwidth)) setBandwidth(0);
@@ -349,25 +354,28 @@ function RadioSettings({
                   {number(c.c) === 0 ? '自动' : number(c.c)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="频宽">
-            <select value={bandwidth} onChange={(e) => setBandwidth(Number(e.target.value))}>
+            <Select
+              value={bandwidth}
+              onValueChange={(selectedValue) => setBandwidth(Number(selectedValue))}
+            >
               <option value={0}>自动</option>
               {widths.map((w) => (
                 <option key={w} value={w}>
                   {w} MHz
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
         </div>
         <Field label="发射强度">
-          <select value={power} onChange={(e) => setPower(e.target.value)}>
+          <Select value={power} onValueChange={(selectedValue) => setPower(selectedValue)}>
             <option value="max">穿墙</option>
             <option value="mid">标准</option>
             <option value="min">节能</option>
-          </select>
+          </Select>
         </Field>
         <Button
           type="submit"
@@ -452,22 +460,25 @@ function DeviceSettings({ data, busy, prepare }: SettingProps) {
             />
           </Field>
           <Field label="操作">
-            <select value={operation} onChange={(e) => setOperation(e.target.value)}>
+            <Select
+              value={operation}
+              onValueChange={(selectedValue) => setOperation(selectedValue)}
+            >
               <option value="deviceAccess">上网权限</option>
               <option value="deviceLimit">设备限速</option>
               <option value="filter.add">加入无线黑名单</option>
               <option value="filter.remove">移出无线黑名单</option>
-            </select>
+            </Select>
           </Field>
           {operation === 'deviceAccess' && (
             <Field label="互联网访问">
-              <select
+              <Select
                 value={allow ? 'allow' : 'block'}
-                onChange={(e) => setAllow(e.target.value === 'allow')}
+                onValueChange={(selectedValue) => setAllow(selectedValue === 'allow')}
               >
                 <option value="allow">允许上网</option>
                 <option value="block">禁止上网</option>
-              </select>
+              </Select>
             </Field>
           )}
           {operation === 'deviceLimit' && (
@@ -712,11 +723,14 @@ function ForwardSettings({ data, busy, prepare }: SettingProps) {
               <input value={name} onChange={(e) => setName(e.target.value)} required />
             </Field>
             <Field label="协议">
-              <select value={protocol} onChange={(e) => setProtocol(Number(e.target.value))}>
+              <Select
+                value={protocol}
+                onValueChange={(selectedValue) => setProtocol(Number(selectedValue))}
+              >
                 <option value={1}>TCP</option>
                 <option value={2}>UDP</option>
                 <option value={3}>TCP + UDP</option>
-              </select>
+              </Select>
             </Field>
           </div>
           <div className="three-fields">

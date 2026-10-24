@@ -9,16 +9,68 @@ const {
   shell,
   session,
   Notification,
+  nativeTheme,
 } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { NativeClient } = require('./native-client.cjs');
+const { loadWindowPreferences } = require('./window-preferences.cjs');
 let win, tray, client;
+let preferences;
 let exiting = false;
 let quitPending = false;
 const product = require('./product.json');
 app.setName(product.productName);
 app.setPath('userData', path.join(app.getPath('appData'), 'NetworkToolbox'));
+function restoreWindow() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+function themeColors() {
+  return product.windowTheme[nativeTheme.shouldUseDarkColors ? 'dark' : 'light'];
+}
+function updateWindowTheme() {
+  if (!win || win.isDestroyed()) return;
+  const colors = themeColors();
+  win.setBackgroundColor(colors.background);
+  win.setTitleBarOverlay({
+    color: colors.titlebar,
+    symbolColor: colors.text,
+    height: product.windowTheme.height,
+  });
+}
+function publicPreferences() {
+  const { theme, closeBehavior, error } = preferences.get();
+  return { theme, closeBehavior, ...(error ? { error } : {}) };
+}
+let trayPending = false;
+async function hideToTray() {
+  if (trayPending) return;
+  trayPending = true;
+  try {
+    if (!tray || tray.isDestroyed())
+      throw new Error('系统托盘不可用，窗口已保持打开。可在应用设置中退出。');
+    if (!preferences.get().trayNoticeSeen) {
+      const choice = await dialog.showMessageBox(win, {
+        type: 'info',
+        title: '窗口将进入托盘',
+        message: '关闭窗口后，NetworkToolbox 会在系统托盘继续运行。',
+        detail: '点击托盘图标可重新打开，在托盘菜单中可退出。你也可以在“应用设置”中更改关闭行为。',
+        buttons: ['进入托盘', '取消'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      });
+      if (choice.response !== 0) return;
+      await preferences.update({ trayNoticeSeen: true }, true);
+    }
+    win.hide();
+  } finally {
+    trayPending = false;
+  }
+}
 if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--request-exit') })) {
   app.quit();
 } else if (process.argv.includes('--request-exit')) {
@@ -29,8 +81,7 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
       app.quit();
       return;
     }
-    win?.show();
-    win?.focus();
+    restoreWindow();
   });
   app
     .whenReady()
@@ -38,6 +89,9 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
       app.setAppUserModelId('local.network.toolbox');
       const root = app.getAppPath();
       const icon = path.join(root, 'assets/icon.png');
+      preferences = await loadWindowPreferences(app.getPath('userData'));
+      nativeTheme.themeSource = preferences.get().theme;
+      const colors = themeColors();
       client = new NativeClient({
         root: app.isPackaged ? path.join(process.resourcesPath, 'native') : root,
         dataDirectory: app.getPath('userData'),
@@ -49,7 +103,14 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
         minWidth: 920,
         minHeight: 680,
         title: product.productName,
-        backgroundColor: '#f5f7f8',
+        backgroundColor: colors.background,
+        titleBarStyle: 'hidden',
+        titleBarOverlay: {
+          color: colors.titlebar,
+          symbolColor: colors.text,
+          height: product.windowTheme.height,
+        },
+        show: false,
         icon,
         autoHideMenuBar: true,
         webPreferences: {
@@ -61,6 +122,8 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
           spellcheck: false,
         },
       });
+      nativeTheme.on('updated', updateWindowTheme);
+      win.once('ready-to-show', () => win.show());
       Menu.setApplicationMenu(null);
       session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
         callback(false),
@@ -119,8 +182,18 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
       ipcMain.handle('toolbox:window', (event, action) => {
         trusted(event);
         if (action === 'minimize') win.minimize();
-        else if (action === 'tray') win.hide();
+        else if (action === 'tray') return hideToTray();
         else if (action === 'quit') app.quit();
+        else throw new Error('窗口操作不支持');
+      });
+      ipcMain.handle('toolbox:preferences', async (event, action, patch) => {
+        trusted(event);
+        if (action === 'get') return publicPreferences();
+        if (action !== 'set') throw new Error('窗口偏好操作不支持');
+        const saved = await preferences.update(patch);
+        nativeTheme.themeSource = saved.theme;
+        updateWindowTheme();
+        return publicPreferences();
       });
       client.on('event', (event) => {
         if (!win.isDestroyed()) win.webContents.send('toolbox:event', event);
@@ -144,42 +217,62 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
         if (!win.isDestroyed())
           win.webContents.send('toolbox:event', { name: 'offline', data: {} });
       });
-      tray = new Tray(nativeImage.createFromPath(path.join(root, 'assets/tray.png')));
-      tray.setToolTip(product.productName);
-      tray.setContextMenu(
-        Menu.buildFromTemplate([
-          {
-            label: `打开 ${product.productName}`,
-            click: () => {
-              win.show();
-              win.focus();
+      try {
+        tray = new Tray(nativeImage.createFromPath(path.join(root, 'assets/tray.png')));
+        tray.setToolTip(product.productName);
+        tray.setContextMenu(
+          Menu.buildFromTemplate([
+            {
+              label: `打开 ${product.productName}`,
+              click: () => {
+                restoreWindow();
+              },
             },
-          },
-          {
-            label: '后台检测任务',
-            click: () => {
-              win.show();
-              win.webContents.send('toolbox:event', { name: 'navigate', data: { page: 'tasks' } });
+            {
+              label: '后台检测任务',
+              click: () => {
+                restoreWindow();
+                win.webContents.send('toolbox:event', {
+                  name: 'navigate',
+                  data: { page: 'tasks' },
+                });
+              },
             },
-          },
-          { type: 'separator' },
-          { label: '退出', click: () => app.quit() },
-        ]),
-      );
-      tray.on('double-click', () => {
-        win.show();
-        win.focus();
-      });
+            { type: 'separator' },
+            { label: '退出', click: () => app.quit() },
+          ]),
+        );
+        tray.on('double-click', () => {
+          restoreWindow();
+        });
+        tray.on('click', restoreWindow);
+      } catch {
+        tray?.destroy();
+        tray = undefined;
+        win.once('ready-to-show', () => {
+          void dialog.showMessageBox(win, {
+            type: 'warning',
+            message: '系统托盘不可用，窗口将保持打开。可在应用设置中退出。',
+          });
+        });
+      }
       win.on('close', (event) => {
         if (!exiting) {
           event.preventDefault();
-          win.hide();
+          if (quitPending) return;
+          if (preferences.get().closeBehavior === 'quit') app.quit();
+          else
+            void hideToTray().catch((error) =>
+              dialog.showMessageBox(win, { type: 'error', message: error.message }),
+            );
         }
       });
       await win.loadFile(path.join(root, 'dist/index.html'));
     })
     .catch(async (error) => {
       await dialog.showMessageBox({ type: 'error', title: '启动失败', message: error.message });
+      await client?.close();
+      tray?.destroy();
       exiting = true;
       app.quit();
     });

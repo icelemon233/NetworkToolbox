@@ -5,21 +5,18 @@ import sharp from 'sharp';
 
 const root = path.resolve(import.meta.dirname, '..');
 const assets = path.join(root, 'assets');
-const source = await fs.readFile(path.join(assets, 'cinna-portrait-source.png'));
+const sourceName = 'cinna-network-source.png';
+const source = await fs.readFile(path.join(assets, sourceName));
 const metadata = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
-const portrait = await sharp(source).resize(960, 960, { fit: 'inside' }).png().toBuffer();
-const master = await sharp({
-  create: { width: 1024, height: 1024, channels: 4, background: '#A8DFF1' },
-})
-  .composite([{ input: portrait, gravity: 'centre' }])
+const master = await sharp(source)
+  .resize(1024, 1024, { fit: 'cover', kernel: 'lanczos3' })
+  .toColourspace('srgb')
   .png()
   .toBuffer();
 await fs.writeFile(path.join(assets, 'icon-master.png'), master);
 async function icon(size, rounded = true) {
-  let image = sharp(master);
-  // Keep the bun, cloud clip and eyes legible in the notification area.
-  if (size < 48) image = image.extract({ left: 95, top: 8, width: 834, height: 834 });
-  let data = await image.resize(size, size, { kernel: 'lanczos3' }).png().toBuffer();
+  // Keep the network tester visible together with Cinna at every exported size.
+  let data = await sharp(master).resize(size, size, { kernel: 'lanczos3' }).png().toBuffer();
   if (rounded) {
     const radius = (size * 112) / 512;
     const mask = Buffer.from(
@@ -63,8 +60,9 @@ await fs.writeFile(
     {
       product: metadata.build.productName,
       version: metadata.version,
-      identity: 'Cinna confirmed portrait',
-      source: 'cinna-portrait-source.png',
+      identity: 'Cinna with a Wi-Fi and Ethernet network analyzer',
+      variant: 'network-analyzer',
+      source: sourceName,
       sourceSha256: digest(source),
       master: 'icon-master.png',
       masterSha256: digest(master),
@@ -80,6 +78,27 @@ await fs.writeFile(
   `<Project><PropertyGroup><Version>${metadata.version}</Version><AssemblyVersion>${metadata.version}.0</AssemblyVersion><FileVersion>${metadata.version}.0</FileVersion></PropertyGroup></Project>\n`,
 );
 console.log(`Prepared ${metadata.build.productName} ${metadata.version} icons and native version`);
+// The renderer's theme tokens also supply the native frame and startup background.
+const themeCss = await fs.readFile(path.join(root, 'src/theme.css'), 'utf8');
+const themeBlocks = [...themeCss.matchAll(/:root[^{]*\{([^}]+)\}/g)].map((match) => match[1]);
+function themeToken(block, name) {
+  const value = block?.match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1]?.trim();
+  if (!value) throw new Error(`Missing window theme token: ${name}`);
+  return value;
+}
+const windowTheme = {
+  height: Number.parseInt(themeToken(themeBlocks[0], 'titlebar-height'), 10),
+  ...Object.fromEntries(
+    ['light', 'dark'].map((name, index) => [
+      name,
+      {
+        background: themeToken(themeBlocks[index], 'canvas'),
+        titlebar: themeToken(themeBlocks[index], 'sidebar'),
+        text: themeToken(themeBlocks[index], 'text'),
+      },
+    ]),
+  ),
+};
 await fs.writeFile(
   path.join(root, 'desktop/product.json'),
   JSON.stringify(
@@ -87,6 +106,7 @@ await fs.writeFile(
       productName: metadata.build.productName,
       version: metadata.version,
       developer: metadata.author,
+      windowTheme,
     },
     null,
     2,
