@@ -15,6 +15,9 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish]')
     runs-on: windows-latest
     timeout-minutes: 30
+    concurrency:
+      group: windows-release-publication
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
@@ -29,6 +32,24 @@ jobs:
           $tagName = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { "v$version" }
           if ($tagName -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Expected a stable version tag' }
           "tag=$tagName" >> $env:GITHUB_OUTPUT
+      - name: Prepare unpublished release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tagName = $env:RELEASE_TAG
+          $releaseList = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Release lookup failed' }
+          $existing = @($releaseList | Where-Object tag_name -eq $tagName)
+          if ($existing.Count -gt 1 -or ($existing.Count -eq 1 -and -not $existing[0].draft)) { throw 'A published release will not be replaced' }
+          if ($existing.Count -eq 0) {
+            # The verified tag already exists. Keep the API's default target branch;
+            # target_commitish is unused for that tag and historical workflow targets require extra scopes.
+            gh release create $tagName --repo $env:GITHUB_REPOSITORY --draft --verify-tag --title "NetworkToolbox $version" --notes-file "docs/releases/$version.md"
+            if ($LASTEXITCODE -ne 0) { throw 'Release draft creation failed' }
+          }
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.version.outputs.tag }}
@@ -96,7 +117,6 @@ jobs:
         run: |
           $version = (Get-Content package.json | ConvertFrom-Json).version
           $tagName = $env:RELEASE_TAG
-          $sourceCommit = git rev-parse HEAD
           $files = @(
             "release/NetworkToolbox-Setup-$version.exe"
             "release/NetworkToolbox-$version-Portable.exe"
@@ -104,12 +124,16 @@ jobs:
             "release/NetworkToolbox-$version-Validation.txt"
             'release/SHA256SUMS.txt'
           )
-          gh release create $tagName @files --repo $env:GITHUB_REPOSITORY --draft --verify-tag --target $sourceCommit --title "NetworkToolbox $version" --notes-file "docs/releases/$version.md"
-          if ($LASTEXITCODE -ne 0) { throw 'Release creation or upload failed; no published release was replaced' }
           $releaseList = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Release draft lookup failed' }
           $releaseMatches = @($releaseList | Where-Object tag_name -eq $tagName)
           if ($releaseMatches.Count -ne 1 -or -not $releaseMatches[0].draft) { throw 'Expected an unpublished release draft' }
+          gh release upload $tagName @files --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
+          $releaseList = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Uploaded asset lookup failed' }
+          $releaseMatches = @($releaseList | Where-Object tag_name -eq $tagName)
+          if ($releaseMatches.Count -ne 1 -or -not $releaseMatches[0].draft) { throw 'Expected the release to remain unpublished during verification' }
           $releaseData = $releaseMatches[0]
           foreach ($file in $files) {
             $name = [IO.Path]::GetFileName($file)
