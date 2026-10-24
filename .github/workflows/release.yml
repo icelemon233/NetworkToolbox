@@ -1,0 +1,97 @@
+name: Windows release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Verify version tag
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and package version differ' }
+      - name: Build and verify Windows packages
+        shell: pwsh
+        run: |
+          ./scripts/build.ps1 -Package
+          if ($LASTEXITCODE -ne 0) { throw 'Windows build or package verification failed' }
+      - name: Prepare source, validation and checksums
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          git archive --format=zip --prefix=NetworkToolbox/ -o "release/NetworkToolbox-$version-Source.zip" HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
+          $validation = @(
+            "NetworkToolbox $version"
+            "Source commit: $env:GITHUB_SHA"
+            'Renderer typecheck, lint, tests and production build: passed.'
+            'Native self-tests and packaged identity/resource verification: passed.'
+            'Build: Windows 11 x64 application, unsigned.'
+            'Live-device and native pointer interaction limits: docs/ui-validation-2026-10-24.md.'
+            'The CI build does not install the application, accept UAC or change live network configuration.'
+          )
+          [IO.File]::WriteAllLines("$PWD/release/NetworkToolbox-$version-Validation.txt", $validation, [Text.UTF8Encoding]::new($false))
+          $files = @(
+            "release/NetworkToolbox-Setup-$version.exe"
+            "release/NetworkToolbox-$version-Portable.exe"
+            "release/NetworkToolbox-$version-Source.zip"
+            "release/NetworkToolbox-$version-Validation.txt"
+          )
+          $checksums = foreach ($file in $files) {
+            $digest = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$digest  $([IO.Path]::GetFileName($file))"
+          }
+          [IO.File]::WriteAllLines("$PWD/release/SHA256SUMS.txt", $checksums, [Text.UTF8Encoding]::new($false))
+      - name: Upload and publish verified release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tagName = $env:GITHUB_REF_NAME
+          $files = @(
+            "release/NetworkToolbox-Setup-$version.exe"
+            "release/NetworkToolbox-$version-Portable.exe"
+            "release/NetworkToolbox-$version-Source.zip"
+            "release/NetworkToolbox-$version-Validation.txt"
+            'release/SHA256SUMS.txt'
+          )
+          gh release create $tagName @files --repo $env:GITHUB_REPOSITORY --draft --verify-tag --target $env:GITHUB_SHA --title "NetworkToolbox $version" --notes-file "docs/releases/$version.md"
+          if ($LASTEXITCODE -ne 0) { throw 'Release creation or upload failed; no published release was replaced' }
+          $releaseList = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Release draft lookup failed' }
+          $releaseMatches = @($releaseList | Where-Object tag_name -eq $tagName)
+          if ($releaseMatches.Count -ne 1 -or -not $releaseMatches[0].draft -or $releaseMatches[0].target_commitish -ne $env:GITHUB_SHA) { throw 'Expected an unpublished release draft for this commit' }
+          $releaseData = $releaseMatches[0]
+          foreach ($file in $files) {
+            $name = [IO.Path]::GetFileName($file)
+            $asset = @($releaseData.assets | Where-Object name -eq $name)
+            $expectedDigest = 'sha256:' + (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($asset.Count -ne 1 -or $asset[0].digest -ne $expectedDigest -or $asset[0].size -ne (Get-Item -LiteralPath $file).Length) {
+              throw "Uploaded asset failed verification: $name"
+            }
+          }
+          gh release edit $tagName --repo $env:GITHUB_REPOSITORY --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
