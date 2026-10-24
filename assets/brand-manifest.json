@@ -1,0 +1,26 @@
+{
+  "product": "NetworkToolbox",
+  "version": "0.2.0",
+  "identity": "Cinna confirmed portrait",
+  "source": "cinna-portrait-source.png",
+  "sourceSha256": "33b0f1980e6adee76bcb2018cf4ef61bc7ebd4b43337c6403cd8c4efbb20f55a",
+  "master": "icon-master.png",
+  "masterSha256": "6bebe0bdc14cf790a725a7e02b97d0742a817975d4bfcca6f778473237a502b3",
+  "icoSizes": [
+    16,
+    20,
+    24,
+    32,
+    40,
+    48,
+    64,
+    128,
+    256
+  ],
+  "files": {
+    "icon.png": "9d75a3eb7f095b3b85ffc36deafbe440fdc2a1df2a68565e542ee99bd7e9c070",
+    "tray.png": "d69271fa2a0d01674d89113c1ab18b123ccded1c994949b24a6745a1ccd125ed",
+    "icon-readme.png": "9197e2a1deb6a19958ba778741bff8c4b3be641ce108c685d8c2057405f12e3b",
+    "icon.ico": "c1bd8f89c7ea0c5b90ece61cc61129ce4b640bfe8f9f336386101ec80724f050"
+  }
+}

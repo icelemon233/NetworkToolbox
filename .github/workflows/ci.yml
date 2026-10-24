@@ -1,0 +1,28 @@
+name: Windows validation
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm assets
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm build
+      - run: dotnet restore native/NetworkToolbox.Native.csproj --locked-mode
+      - run: dotnet build native/NetworkToolbox.Native.csproj --no-restore
+      - run: native/bin/Debug/net10.0-windows/win-x64/NetworkToolbox.Native.exe --self-test

@@ -1,0 +1,104 @@
+{
+  "name": "network-toolbox",
+  "version": "0.2.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "description": "Windows 网络工具箱",
+  "author": "Cinna",
+  "main": "desktop/main.cjs",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src desktop scripts",
+    "format": "prettier --write src desktop scripts *.json *.ts *.html *.yaml",
+    "format:check": "prettier --check src desktop scripts *.json *.ts *.html *.yaml",
+    "assets": "node scripts/icon.mjs",
+    "build": "pnpm assets && pnpm typecheck && vite build",
+    "test": "vitest run",
+    "preview:local": "node scripts/preview.mjs",
+    "desktop": "electron .",
+    "package:dir": "electron-builder --win --dir",
+    "package": "electron-builder --win nsis portable"
+  },
+  "dependencies": {
+    "lucide-react": "1.61.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "sharp": "0.35.5",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  },
+  "build": {
+    "electronDist": "node_modules/electron/dist",
+    "appId": "local.network.toolbox",
+    "productName": "NetworkToolbox",
+    "copyright": "Copyright © 2026 Cinna",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "desktop/main.cjs",
+      "desktop/preload.cjs",
+      "desktop/native-client.cjs",
+      "desktop/product.json",
+      "assets/icon.png",
+      "assets/icon.ico",
+      "assets/tray.png",
+      "assets/brand-manifest.json",
+      "package.json"
+    ],
+    "afterPack": "desktop/after-pack.cjs",
+    "extraResources": [
+      {
+        "from": "THIRD_PARTY_NOTICES.txt",
+        "to": "THIRD_PARTY_NOTICES.txt"
+      },
+      {
+        "from": "native/publish",
+        "to": "native"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "signExecutable": false
+    },
+    "nsis": {
+      "include": "desktop/installer.nsh",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "NetworkToolbox-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "NetworkToolbox-${version}-Portable.${ext}"
+    }
+  }
+}
