@@ -10,7 +10,7 @@
 
 [下载 Windows 版本](https://github.com/icelemon233/NetworkToolbox/releases/latest)。
 
-v0.2.2 的安装版和便携版均包含新版界面。
+v0.2.3 安装版已统一欢迎页、页头和卸载向导的 Cinna 配图。
 
 - `NetworkToolbox-<版本>-Portable.exe`：直接运行，无需安装 Node.js 或 .NET。
 - `NetworkToolbox-Setup-<版本>.exe`：安装版，可选择安装目录。

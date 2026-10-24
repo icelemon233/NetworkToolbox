@@ -95,6 +95,7 @@ jobs:
             'Native self-tests and packaged identity/resource verification: passed.'
             'Build: Windows 11 x64 application, unsigned.'
             'Live-device and native pointer interaction limits: docs/ui-validation-2026-10-24.md.'
+            'Installer artwork and isolated local QA: docs/validation-0.2.3.md; uninstaller UI capture was blocked by the desktop automation tool.'
             'The CI build does not install the application, accept UAC or change live network configuration.'
           )
           [IO.File]::WriteAllLines("$PWD/release/NetworkToolbox-$version-Validation.txt", $validation, [Text.UTF8Encoding]::new($false))

@@ -1,6 +1,6 @@
 {
   "name": "network-toolbox",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
@@ -19,11 +19,11 @@
     "format:check": "prettier --check src desktop scripts public *.json *.ts *.html *.yaml",
     "assets": "node scripts/icon.mjs",
     "build": "pnpm assets && pnpm typecheck && vite build",
-    "test": "vitest run && node --test scripts/window-preferences-test.mjs",
+    "test": "vitest run && node --test scripts/window-preferences-test.mjs scripts/installer-artwork-test.mjs",
     "preview:local": "node scripts/preview.mjs",
     "desktop": "electron .",
-    "package:dir": "electron-builder --win --dir",
-    "package": "electron-builder --win nsis portable"
+    "package:dir": "electron-builder --win --dir --publish never",
+    "package": "electron-builder --win nsis portable --publish never"
   },
   "dependencies": {
     "@radix-ui/react-select": "2.4.1",
@@ -103,6 +103,12 @@
       "installerIcon": "assets/icon.ico",
       "uninstallerIcon": "assets/icon.ico",
       "installerHeaderIcon": "assets/icon.ico",
+      "installerHeader": "assets/installer-header.bmp",
+      "installerSidebar": "assets/installer-sidebar.bmp",
+      "uninstallerSidebar": "assets/installer-sidebar.bmp",
+      "installerLanguages": [
+        "zh_CN"
+      ],
       "deleteAppDataOnUninstall": false,
       "artifactName": "NetworkToolbox-Setup-${version}.${ext}"
     },

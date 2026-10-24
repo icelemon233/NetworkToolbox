@@ -10,7 +10,7 @@ A Windows network toolbox for Wi-Fi channel analysis, connection diagnostics, th
 
 [Download the Windows release](https://github.com/icelemon233/NetworkToolbox/releases/latest).
 
-The v0.2.2 installer and portable build include the updated interface.
+The v0.2.3 installer includes the Cinna welcome, page header and uninstall artwork.
 
 Windows 11 x64 is required. The portable application and installer include Electron and a self-contained .NET worker; end users do not need Node.js or a .NET installation.
 

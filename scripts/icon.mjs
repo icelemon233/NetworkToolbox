@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
+import { exportInstallerArtwork, installerArtwork } from './installer-artwork.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const assets = path.join(root, 'assets');
@@ -50,6 +51,7 @@ const files = {
   'tray.png': await icon(32),
   'icon-readme.png': await icon(512),
   'icon.ico': Buffer.concat([header, ...layers]),
+  ...(await exportInstallerArtwork(master)),
 };
 for (const [name, bytes] of Object.entries(files))
   await fs.writeFile(path.join(assets, name), bytes);
@@ -67,6 +69,7 @@ await fs.writeFile(
       master: 'icon-master.png',
       masterSha256: digest(master),
       icoSizes: sizes,
+      installerArtwork,
       files: Object.fromEntries(Object.entries(files).map(([name, data]) => [name, digest(data)])),
     },
     null,

@@ -1,6 +1,6 @@
 {
   "product": "NetworkToolbox",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "identity": "Cinna with a Wi-Fi and Ethernet network analyzer",
   "variant": "network-analyzer",
   "source": "cinna-network-source.png",
@@ -18,10 +18,33 @@
     128,
     256
   ],
+  "installerArtwork": {
+    "background": "#FFFCF6",
+    "sidebar": {
+      "file": "installer-sidebar.bmp",
+      "width": 164,
+      "height": 314,
+      "x": 8,
+      "y": 58,
+      "size": 148,
+      "radius": 32
+    },
+    "header": {
+      "file": "installer-header.bmp",
+      "width": 150,
+      "height": 57,
+      "x": 98,
+      "y": 4,
+      "size": 48,
+      "radius": 11
+    }
+  },
   "files": {
     "icon.png": "9bed4086dd099349e065647451ab7900bb330be7b15a4d7d27f7a99d002baece",
     "tray.png": "7045997c86172fc1ce2128b97bdbbcefda13c833ed11254529c715c4c2560660",
     "icon-readme.png": "e3410723f8557d4940475cb4b7b1860c536c132e8108047285c0c4878d031dc8",
-    "icon.ico": "0c7e7ee0aa2e4d5622dcf3592a1b90a6d3cc5b10793c770237aee74b7568559c"
+    "icon.ico": "0c7e7ee0aa2e4d5622dcf3592a1b90a6d3cc5b10793c770237aee74b7568559c",
+    "installer-sidebar.bmp": "bab34b2c43f82f3b81ada3e70dba2b7338a0b628b45f60e470aef11109185af8",
+    "installer-header.bmp": "a46b1e733d4f0c8329109378cdebc552f284cec4e49c7e09fd92f2a2b02aa113"
   }
 }

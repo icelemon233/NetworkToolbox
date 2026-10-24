@@ -8,6 +8,8 @@ The application-specific artwork is preserved at `assets/cinna-network-source.pn
 
 `scripts/icon.mjs` derives a 1024 px square master, rounded UI and README PNGs, a tray image and ICO layers at 16/20/24/32/40/48/64/128/256 px. Small exports keep the tester together with the character. README alpha uses a 112 px corner radius at 512 px.
 
+The installer and uninstaller follow the shared LanDrop wizard layout. `pnpm assets` exports RGB24 BMPs on cream (`#FFFCF6`): `installer-sidebar.bmp` is 164 × 314 with a 148 px rounded icon at (8, 58), and `installer-header.bmp` is 150 × 57 with a 48 px rounded icon at (98, 4). The corner radii are 32 px and 11 px respectively. Welcome and finish pages use the sidebar; intermediate pages use the right-aligned header. Chinese welcome text and window captions include the product name and version. Both bitmaps are included in the brand manifest and checked before packaging.
+
 `assets/brand-manifest.json` records the `network-analyzer` variant plus source, master and derived hashes. Packaging rejects the generic portrait variant, stale product identity or changed source/derived image hashes. Frontend imports use Vite content hashes. The Electron window, tray, notification, main executable, native helper, NSIS installer and uninstaller reference these resources. Build-only masters and source artwork are excluded from the installed application.
 
 The installer gives desktop and Start menu shortcuts a versioned `resources/app-icon-<version>.ico` source and preserves the application ID. This avoids reusing a cached EXE icon after an artwork update. It refreshes existing shortcuts without recreating a shortcut the user removed, clearing global caches or restarting Explorer.
