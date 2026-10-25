@@ -18,9 +18,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - run: pnpm install --frozen-lockfile
-      - run: pnpm assets
       - run: ./scripts/prepare-window-frame.ps1
         shell: pwsh
+      - run: pnpm assets
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
