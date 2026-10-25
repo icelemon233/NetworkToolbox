@@ -16,7 +16,7 @@ $qaRecord = Get-Content -LiteralPath ($qaSetup+'.build.json') -Raw | ConvertFrom
 if($qaRecord.qaRoot -ne $qaRoot){throw 'Never run installer integration against a production build.'}
 $qaKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\'+$qaRecord.setupId+'_is1'
 $qaLegacyKey = 'Software\Cinna\InstallerQA\'+$qaId+'\Legacy'
-$qaApplication = Join-Path $qaRoot '程序 安装'
+$qaApplication = Join-Path $qaRoot '程序 安装 🧊'
 $qaData = Join-Path $qaRoot 'data'
 New-Item -ItemType Directory -Path $qaData,$qaApplication -Force | Out-Null
 $qaUserFile = Join-Path $qaApplication '用户保留文件.txt'
@@ -72,10 +72,14 @@ $qaChecks.Add('concurrent maintenance lock refuses writes')
 Invoke-QaInstaller $qaSetup ($qaArgs+@('/TASKS=desktopicon',('/LOG="'+(Join-Path $qaRoot 'upgrade.log')+'"'))) | Out-Null
 Assert-Qa (Test-Path -LiteralPath $qaDesktop) 'Desktop preference was not applied on upgrade.'
 Assert-Qa (-not (Test-Path -LiteralPath $qaStart)) 'Start menu preference was not applied on upgrade.'
-$qaShell = New-Object -ComObject WScript.Shell
-$qaLink = $qaShell.CreateShortcut($qaDesktop)
-Assert-Qa ($qaLink.TargetPath -eq (Join-Path $qaApplication $qaProduct.Executable)) 'Shortcut points outside this installation.'
+$qaShell = New-Object -ComObject Shell.Application
+$qaFolder = $qaShell.NameSpace((Split-Path -Parent $qaDesktop))
+$qaItem = $qaFolder.ParseName([IO.Path]::GetFileName($qaDesktop))
+$qaLink = $qaItem.GetLink
+Assert-Qa ($qaLink.Path -eq (Join-Path $qaApplication $qaProduct.Executable)) 'Shortcut points outside this installation.'
 [Runtime.InteropServices.Marshal]::FinalReleaseComObject($qaLink) | Out-Null
+[Runtime.InteropServices.Marshal]::FinalReleaseComObject($qaItem) | Out-Null
+[Runtime.InteropServices.Marshal]::FinalReleaseComObject($qaFolder) | Out-Null
 [Runtime.InteropServices.Marshal]::FinalReleaseComObject($qaShell) | Out-Null
 Assert-QaPreserved
 $qaChecks.Add('in-place upgrade and shortcut preferences')
@@ -105,10 +109,19 @@ if($qaProduct.Kind -eq 'landrop'){
   New-Item -ItemType Directory -Path (Split-Path -Parent $qaOldLink) -Force | Out-Null
   $qaOldShell = New-Object -ComObject WScript.Shell
   $qaOldShortcut = $qaOldShell.CreateShortcut($qaOldLink)
-  $qaOldShortcut.TargetPath = $qaLegacyUninstaller
+  $qaOldShortcut.TargetPath = Join-Path $env:WINDIR 'System32\notepad.exe'
   $qaOldShortcut.Save()
   [Runtime.InteropServices.Marshal]::FinalReleaseComObject($qaOldShortcut) | Out-Null
   [Runtime.InteropServices.Marshal]::FinalReleaseComObject($qaOldShell) | Out-Null
+  # WScript's target property uses the system code page. Shell's link object
+  # preserves the full Unicode target when creating this legacy fixture.
+  $qaOldShell = New-Object -ComObject Shell.Application
+  $qaOldFolder = $qaOldShell.NameSpace((Split-Path -Parent $qaOldLink))
+  $qaOldItem = $qaOldFolder.ParseName([IO.Path]::GetFileName($qaOldLink))
+  $qaOldShortcut = $qaOldItem.GetLink
+  $qaOldShortcut.Path = $qaLegacyUninstaller
+  $qaOldShortcut.Save()
+  foreach($qaOldObject in @($qaOldShortcut,$qaOldItem,$qaOldFolder,$qaOldShell)){[Runtime.InteropServices.Marshal]::FinalReleaseComObject($qaOldObject) | Out-Null}
 }
 Invoke-QaInstaller $qaSetup ($qaArgs+@('/TASKS=desktopicon,startmenuicon',('/LOG="'+(Join-Path $qaRoot 'legacy-migration.log')+'"'))) | Out-Null
 Assert-Qa ([Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($qaLegacyKey) -eq $null) 'Legacy registration was not retired.'

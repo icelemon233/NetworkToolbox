@@ -278,7 +278,7 @@ begin
 end;
 
 function ValidateDirectory(Dir: String): String;
-var Ancestor, Existing, ProtectedPath: String; Attributes: LongWord; I: Integer;
+var Ancestor, Existing, ProtectedPath: String; Attributes: LongWord; I, CharacterCode: Integer;
 begin
   Result := '';
   if Length(Dir) < 4 then begin
@@ -287,11 +287,15 @@ begin
   if (Dir[2] <> ':') or ((Dir[3] <> '\') and (Dir[3] <> '/')) then begin
     Result := '请输入本机磁盘中的完整应用目录，例如 D:\Apps\{#ProductName}。'; exit;
   end;
-  for I := 1 to Length(Dir) do
-    if (Ord(Dir[I]) < 32) or (Pos(Copy(Dir, I, 1), '"<>|?*') > 0) or ((Dir[I] = ':') and (I <> 2)) then begin
-      Log(Format('Invalid path character at %d (Unicode %d)', [I, Ord(Dir[I])]));
+  for I := 1 to Length(Dir) do begin
+    CharacterCode := Ord(Dir[I]);
+    if (CharacterCode < 32) or (CharacterCode = 34) or (CharacterCode = 60) or
+      (CharacterCode = 62) or (CharacterCode = 124) or (CharacterCode = 63) or
+      (CharacterCode = 42) or ((CharacterCode = 58) and (I <> 2)) then begin
+      Log(Format('Invalid path character at %d (Unicode %d)', [I, CharacterCode]));
       Result := '安装路径包含无效字符，请选择单独的应用文件夹。'; exit;
     end;
+  end;
   Dir := RemoveBackslashUnlessRoot(ExpandFileName(Dir));
   if (Length(Dir) < 4) or (Length(Dir) > 150) or (Copy(Dir, 1, 2) = '\\') or (Dir[2] <> ':') then begin
     Result := '请选择本机磁盘中单独的应用文件夹，路径不超过 150 个字符。'; exit;
@@ -341,13 +345,15 @@ begin
 end;
 
 function OwnsShortcut(Path, Target: String): Boolean;
-var Shell, Link: Variant; ActualTarget: String;
+var Shell, Folder, Item, Link: Variant; ActualTarget: String;
 begin
   Result := False;
   if not FileExists(Path) or HasPathLink(Path) then exit;
   try
-    Shell := CreateOleObject('WScript.Shell'); Link := Shell.CreateShortcut(Path);
-    ActualTarget := Link.TargetPath; Result := SamePath(ActualTarget, Target);
+    Shell := CreateOleObject('Shell.Application');
+    Folder := Shell.NameSpace(ExtractFileDir(Path));
+    Item := Folder.ParseName(ExtractFileName(Path)); Link := Item.GetLink;
+    ActualTarget := Link.Path; Result := SamePath(ActualTarget, Target);
     if not Result then Log('Shortcut target mismatch: ' + ActualTarget + ' <> ' + Target);
   except
     Log('Shortcut ownership could not be verified: ' + Path);
@@ -606,7 +612,7 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var OldDirectory, OldLink: String; Shell, Link: Variant;
+var OldDirectory, OldLink: String;
 begin
   if CurStep = ssInstall then begin
     InstallWriteStarted := True;
@@ -622,13 +628,7 @@ begin
 #include "legacy-cleanup.iss"
 #if ProductKind == "landrop"
     OldLink := ExpandConstant('{#StartMenuDirectory}\卸载.lnk');
-    if FileExists(OldLink) then try
-      Shell := CreateOleObject('WScript.Shell');
-      Link := Shell.CreateShortcut(OldLink);
-      if SamePath(Link.TargetPath, AddBackslash(OldDirectory) + 'Uninstall.exe') then DeleteFile(OldLink);
-    except
-      Log('Legacy shortcut could not be inspected: ' + GetExceptionMessage);
-    end;
+    RemoveOwnedShortcut(OldLink, AddBackslash(OldDirectory) + 'Uninstall.exe');
 #endif
     RegDeleteKeyIncludingSubkeys(SelectedRoot, LegacyKey);
   end;
