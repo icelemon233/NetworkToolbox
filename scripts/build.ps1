@@ -17,6 +17,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
   pnpm exec install-electron
   if ($LASTEXITCODE -ne 0) { throw 'Electron installation failed' }
+  & (Join-Path $PSScriptRoot 'prepare-window-frame.ps1')
   pnpm lint
   if ($LASTEXITCODE -ne 0) { throw 'Lint failed' }
   pnpm test

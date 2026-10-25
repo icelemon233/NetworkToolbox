@@ -51,12 +51,10 @@ export function PageHeader({
   description?: string;
   actions?: ReactNode;
 }) {
+  if (!description && !actions) return null;
   return (
-    <header className="page-header">
-      <div>
-        <h1>{title}</h1>
-        {description && <p>{description}</p>}
-      </div>
+    <header className="page-header" aria-label={title}>
+      <div>{description && <p>{description}</p>}</div>
       {actions && <div className="header-actions">{actions}</div>}
     </header>
   );

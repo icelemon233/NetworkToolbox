@@ -52,6 +52,7 @@ export interface SelectProps {
   id?: string;
   className?: string;
   title?: string;
+  leadingIcon?: ReactNode;
   'aria-label'?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
@@ -68,6 +69,7 @@ export function Select({
   id,
   className = '',
   title,
+  leadingIcon,
   ...aria
 }: SelectProps) {
   const options = readOptions(children);
@@ -110,9 +112,16 @@ export function Select({
             undefined
           }
         >
-          <Primitive.Value placeholder={placeholder} />
+          {leadingIcon && (
+            <span className="select-leading" aria-hidden="true">
+              {leadingIcon}
+            </span>
+          )}
+          <span className="select-value">
+            <Primitive.Value placeholder={placeholder} />
+          </span>
           <Primitive.Icon className="select-chevron">
-            <ChevronDown size={16} />
+            <ChevronDown size={18} strokeWidth={1.65} />
           </Primitive.Icon>
         </Primitive.Trigger>
         <Primitive.Portal>
@@ -124,7 +133,7 @@ export function Select({
             hideWhenDetached
           >
             <Primitive.ScrollUpButton className="select-scroll">
-              <ChevronUp size={16} />
+              <ChevronUp size={18} strokeWidth={1.65} />
             </Primitive.ScrollUpButton>
             <Primitive.Viewport className="select-viewport">
               {options
@@ -139,13 +148,13 @@ export function Select({
                   >
                     <Primitive.ItemText>{option.label}</Primitive.ItemText>
                     <Primitive.ItemIndicator className="select-check">
-                      <Check size={16} />
+                      <Check size={18} strokeWidth={1.65} />
                     </Primitive.ItemIndicator>
                   </Primitive.Item>
                 ))}
             </Primitive.Viewport>
             <Primitive.ScrollDownButton className="select-scroll">
-              <ChevronDown size={16} />
+              <ChevronDown size={18} strokeWidth={1.65} />
             </Primitive.ScrollDownButton>
           </Primitive.Content>
         </Primitive.Portal>

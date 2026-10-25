@@ -1,9 +1,9 @@
 {
   "productName": "NetworkToolbox",
-  "version": "0.2.3",
+  "version": "1.0.0",
   "developer": "Cinna",
   "windowTheme": {
-    "height": 40,
+    "height": 44,
     "light": {
       "background": "#fffcf6",
       "titlebar": "#f4f4f0",

@@ -19,6 +19,8 @@ jobs:
           dotnet-version: '10.0.x'
       - run: pnpm install --frozen-lockfile
       - run: pnpm assets
+      - run: ./scripts/prepare-window-frame.ps1
+        shell: pwsh
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
@@ -26,3 +28,12 @@ jobs:
       - run: dotnet restore native/NetworkToolbox.Native.csproj --locked-mode
       - run: dotnet build native/NetworkToolbox.Native.csproj --no-restore
       - run: native/bin/Debug/net10.0-windows/win-x64/NetworkToolbox.Native.exe --self-test
+      - run: dotnet publish native/NetworkToolbox.Native.csproj -c Release --no-restore -o native/publish -p:DebugType=None -p:DebugSymbols=false
+      - run: pnpm exec install-electron
+      - run: pnpm package:dir
+      - name: Test isolated Inno installer
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          ./installer/inno/test.ps1 -PayloadDirectory release/win-unpacked -Version $version
+          ./installer/inno/test-custom.ps1 -PayloadDirectory release/win-unpacked -Version $version

@@ -10,19 +10,24 @@ const {
   session,
   Notification,
   nativeTheme,
+  screen,
 } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { NativeClient } = require('./native-client.cjs');
 const { loadWindowPreferences } = require('./window-preferences.cjs');
+const { uiQaSession } = require('./window-shell.cjs');
 let win, tray, client;
 let preferences;
 let exiting = false;
 let quitPending = false;
 const product = require('./product.json');
+const windowShell = require('./window-shell.json');
+const qa = uiQaSession(process.argv, app.getPath('appData'));
 app.setName(product.productName);
-app.setPath('userData', path.join(app.getPath('appData'), 'NetworkToolbox'));
+app.setPath('userData', qa?.directory ?? path.join(app.getPath('appData'), 'NetworkToolbox'));
 function restoreWindow() {
+  if (qa?.hidden) return;
   if (!win || win.isDestroyed()) return;
   if (win.isMinimized()) win.restore();
   win.show();
@@ -35,11 +40,6 @@ function updateWindowTheme() {
   if (!win || win.isDestroyed()) return;
   const colors = themeColors();
   win.setBackgroundColor(colors.background);
-  win.setTitleBarOverlay({
-    color: colors.titlebar,
-    symbolColor: colors.text,
-    height: product.windowTheme.height,
-  });
 }
 function publicPreferences() {
   const { theme, closeBehavior, error } = preferences.get();
@@ -86,30 +86,37 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
   app
     .whenReady()
     .then(async () => {
-      app.setAppUserModelId('local.network.toolbox');
+      app.setAppUserModelId(qa ? 'local.network.toolbox.ui-qa' : 'local.network.toolbox');
       const root = app.getAppPath();
       const icon = path.join(root, 'assets/icon.png');
       preferences = await loadWindowPreferences(app.getPath('userData'));
+      if (qa) {
+        const exists = await fs
+          .stat(path.join(qa.directory, 'window-preferences.json'))
+          .catch(() => null);
+        if (!exists) await preferences.update({ theme: qa.theme });
+      }
       nativeTheme.themeSource = preferences.get().theme;
       const colors = themeColors();
-      client = new NativeClient({
-        root: app.isPackaged ? path.join(process.resourcesPath, 'native') : root,
-        dataDirectory: app.getPath('userData'),
-        packaged: app.isPackaged,
-      });
+      if (!qa)
+        client = new NativeClient({
+          root: app.isPackaged ? path.join(process.resourcesPath, 'native') : root,
+          dataDirectory: app.getPath('userData'),
+          packaged: app.isPackaged,
+        });
       win = new BrowserWindow({
-        width: 1440,
-        height: 940,
+        width: qa?.width ?? 1440,
+        height: qa?.height ?? 940,
         minWidth: 920,
         minHeight: 680,
-        title: product.productName,
+        title: qa ? `${product.productName} · UI QA` : product.productName,
         backgroundColor: colors.background,
+        frame: true,
+        thickFrame: true,
+        roundedCorners: true,
+        resizable: true,
         titleBarStyle: 'hidden',
-        titleBarOverlay: {
-          color: colors.titlebar,
-          symbolColor: colors.text,
-          height: product.windowTheme.height,
-        },
+        titleBarOverlay: false,
         show: false,
         icon,
         autoHideMenuBar: true,
@@ -120,26 +127,112 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
           sandbox: true,
           webviewTag: false,
           spellcheck: false,
+          backgroundThrottling: !qa,
+          additionalArguments: [
+            `--toolbox-initial-theme=${preferences.get().theme}`,
+            `--toolbox-native-theme=${nativeTheme.shouldUseDarkColors ? 'dark' : 'light'}`,
+            ...(qa ? ['--toolbox-ui-qa'] : []),
+          ],
         },
       });
       nativeTheme.on('updated', updateWindowTheme);
-      win.once('ready-to-show', () => win.show());
+      if (process.platform === 'win32') {
+        require('./win32/window-frame.node').attach(
+          win.getNativeWindowHandle(),
+          windowShell.titlebar.height,
+          windowShell.titlebar.captionButtonWidth,
+        );
+        win.hookWindowMessage(0x8443, (wparam) => {
+          const state = wparam.readUInt32LE(0);
+          if (!win.webContents.isDestroyed())
+            win.webContents.send('toolbox:event', {
+              name: 'window-caption',
+              data: { hovered: state & 0xff, pressed: (state >> 8) & 0xff },
+            });
+        });
+        for (const message of [0x00a1, 0x00a4])
+          win.hookWindowMessage(message, () => {
+            if (!win.webContents.isDestroyed())
+              win.webContents.send('toolbox:event', { name: 'window-pointer', data: {} });
+          });
+      }
+      for (const event of ['maximize', 'unmaximize'])
+        win.on(
+          event,
+          () =>
+            !win.webContents.isDestroyed() &&
+            win.webContents.send('toolbox:event', {
+              name: 'window-state',
+              data: { maximized: win.isMaximized() },
+            }),
+        );
+      win.once('ready-to-show', () => {
+        if (!qa) win.show();
+        else if (!qa.hidden) win.showInactive();
+      });
       Menu.setApplicationMenu(null);
       session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
         callback(false),
       );
       win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       win.webContents.on('will-navigate', (event) => event.preventDefault());
+      if (qa) win.on('page-title-updated', (event) => event.preventDefault());
+      if (qa) {
+        const recordMetrics = () => {
+          const bounds = win.getBounds();
+          const metrics = {
+            pid: process.pid,
+            handle: win.getNativeWindowHandle().toString('hex'),
+            requested: { width: qa.width, height: qa.height },
+            bounds,
+            contentBounds: win.getContentBounds(),
+            maximized: win.isMaximized(),
+            displayScaleFactor: screen.getDisplayMatching(bounds).scaleFactor,
+            webContentsZoomFactor: win.webContents.getZoomFactor(),
+          };
+          void fs
+            .writeFile(
+              path.join(qa.directory, 'qa-window-metrics.json'),
+              JSON.stringify(metrics, null, 2),
+            )
+            .catch(console.error);
+        };
+        for (const event of ['ready-to-show', 'resize', 'maximize', 'unmaximize'])
+          win.on(event, recordMetrics);
+      }
       function trusted(event) {
         if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame)
           throw new Error('不允许此页面操作本机');
       }
+      ipcMain.on('toolbox:startup', (event) => {
+        try {
+          trusted(event);
+          event.returnValue = {
+            theme: preferences.get().theme,
+            nativeTheme: nativeTheme.shouldUseDarkColors ? 'dark' : 'light',
+            uiQa: Boolean(qa),
+          };
+        } catch {
+          event.returnValue = null;
+        }
+      });
       ipcMain.handle('toolbox:call', async (event, method, params) => {
         trusted(event);
+        if (qa) {
+          if (method === 'meta')
+            return {
+              version: product.version,
+              platform: process.platform,
+              dataDirectory: qa.directory,
+              uiQa: true,
+            };
+          throw new Error('界面验收模式未启动本机服务，网络检测与配置操作已停用。');
+        }
         return client.call(method, params);
       });
       ipcMain.handle('toolbox:export', async (event, id, kind) => {
         trusted(event);
+        if (qa) throw new Error('界面验收模式不导出检测记录。');
         if (
           typeof id !== 'string' ||
           !/^[-a-zA-Z0-9]{1,100}$/.test(id) ||
@@ -160,6 +253,7 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
       });
       ipcMain.handle('toolbox:open', async (event, value) => {
         trusted(event);
+        if (qa) throw new Error('界面验收模式不打开外部程序或网址。');
         if (value === 'ms-settings:privacy-location') {
           await shell.openExternal(value);
           return;
@@ -182,6 +276,10 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
       ipcMain.handle('toolbox:window', (event, action) => {
         trusted(event);
         if (action === 'minimize') win.minimize();
+        else if (action === 'maximize') {
+          if (win.isMaximized()) win.unmaximize();
+          else win.maximize();
+        } else if (action === 'close') win.close();
         else if (action === 'tray') return hideToTray();
         else if (action === 'quit') app.quit();
         else throw new Error('窗口操作不支持');
@@ -195,7 +293,7 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
         updateWindowTheme();
         return publicPreferences();
       });
-      client.on('event', (event) => {
+      client?.on('event', (event) => {
         if (!win.isDestroyed()) win.webContents.send('toolbox:event', event);
         if (
           event.name === 'job' &&
@@ -213,13 +311,13 @@ if (!app.requestSingleInstanceLock({ requestExit: process.argv.includes('--reque
           }).show();
         }
       });
-      client.on('offline', () => {
+      client?.on('offline', () => {
         if (!win.isDestroyed())
           win.webContents.send('toolbox:event', { name: 'offline', data: {} });
       });
       try {
         tray = new Tray(nativeImage.createFromPath(path.join(root, 'assets/tray.png')));
-        tray.setToolTip(product.productName);
+        tray.setToolTip(qa ? `${product.productName} · UI QA` : product.productName);
         tray.setContextMenu(
           Menu.buildFromTemplate([
             {

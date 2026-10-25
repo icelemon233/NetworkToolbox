@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# Retain verbatim third-party license formatting.
+installer/inno/licenses/** -whitespace

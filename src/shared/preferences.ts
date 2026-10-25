@@ -19,6 +19,7 @@ export function savePreference(key: string, value: string): boolean {
 }
 
 export function readTheme(): Theme {
+  if (window.networkToolbox?.initialTheme) return window.networkToolbox.initialTheme;
   const value = readPreference('theme');
   return value === 'light' || value === 'dark' ? value : 'system';
 }

@@ -1,4 +1,17 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const startupArguments = typeof process === 'undefined' ? [] : process.argv;
+const bootstrap =
+  typeof ipcRenderer.sendSync === 'function' ? ipcRenderer.sendSync('toolbox:startup') : null;
+const initialTheme =
+  bootstrap?.theme ??
+  startupArguments
+    .find((argument) => argument.startsWith('--toolbox-initial-theme='))
+    ?.split('=')[1];
+const nativeTheme =
+  bootstrap?.nativeTheme ??
+  startupArguments
+    .find((argument) => argument.startsWith('--toolbox-native-theme='))
+    ?.split('=')[1];
 async function invoke(channel, ...args) {
   try {
     return await ipcRenderer.invoke(channel, ...args);
@@ -11,6 +24,9 @@ async function invoke(channel, ...args) {
   }
 }
 contextBridge.exposeInMainWorld('networkToolbox', {
+  uiQa: bootstrap?.uiQa === true || startupArguments.includes('--toolbox-ui-qa'),
+  initialTheme: ['system', 'light', 'dark'].includes(initialTheme) ? initialTheme : undefined,
+  nativeTheme: ['light', 'dark'].includes(nativeTheme) ? nativeTheme : undefined,
   call: (method, params) => invoke('toolbox:call', method, params),
   onEvent: (callback) => {
     const listener = (_event, data) => callback(data);

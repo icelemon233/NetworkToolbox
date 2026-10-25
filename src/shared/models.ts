@@ -77,6 +77,9 @@ export interface WindowPreferences {
   error?: string;
 }
 export interface Bridge {
+  readonly uiQa?: boolean;
+  readonly initialTheme?: WindowPreferences['theme'];
+  readonly nativeTheme?: 'light' | 'dark';
   call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
   onEvent(callback: (event: NativeEvent) => void): () => void;
   exportRecord(
@@ -84,7 +87,7 @@ export interface Bridge {
     kind: 'report' | 'capture',
   ): Promise<{ saved?: boolean; cancelled?: boolean; path?: string }>;
   openExternal(url: string): Promise<void>;
-  window(action: 'minimize' | 'tray' | 'quit'): Promise<void>;
+  window(action: 'minimize' | 'maximize' | 'close' | 'tray' | 'quit'): Promise<void>;
   getWindowPreferences(): Promise<WindowPreferences>;
   setWindowPreferences(
     preferences: Partial<Pick<WindowPreferences, 'theme' | 'closeBehavior'>>,

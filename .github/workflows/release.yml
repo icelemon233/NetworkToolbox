@@ -1,148 +1,54 @@
-name: Windows release
-
+name: Publish verified Windows release
 on:
   push:
     tags: ['v*']
-    branches: [main]
-    paths: ['.github/workflows/release.yml']
   workflow_dispatch:
-
 permissions:
   contents: read
-
+concurrency:
+  group: verified-windows-release
+  cancel-in-progress: false
 jobs:
-  release:
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish]')
+  publish:
+    if: github.ref_type == 'tag'
     runs-on: windows-latest
-    timeout-minutes: 30
-    concurrency:
-      group: windows-release-publication
-      cancel-in-progress: false
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - name: Resolve source tag
-        id: version
-        shell: pwsh
-        run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          $tagName = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { "v$version" }
-          if ($tagName -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Expected a stable version tag' }
-          "tag=$tagName" >> $env:GITHUB_OUTPUT
-      - name: Prepare unpublished release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          $tagName = $env:RELEASE_TAG
-          $releaseList = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'Release lookup failed' }
-          $existing = @($releaseList | Where-Object tag_name -eq $tagName)
-          if ($existing.Count -gt 1 -or ($existing.Count -eq 1 -and -not $existing[0].draft)) { throw 'A published release will not be replaced' }
-          if ($existing.Count -eq 0) {
-            # The verified tag already exists. Keep the API's default target branch;
-            # target_commitish is unused for that tag and historical workflow targets require extra scopes.
-            gh release create $tagName --repo $env:GITHUB_REPOSITORY --draft --verify-tag --title "NetworkToolbox $version" --notes-file "docs/releases/$version.md"
-            if ($LASTEXITCODE -ne 0) { throw 'Release draft creation failed' }
-          }
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.version.outputs.tag }}
-          persist-credentials: false
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.25.0
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: pnpm
+      - run: npm install --global --ignore-scripts pnpm@11.25.0
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Verify version tag
-        shell: pwsh
-        env:
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          if ($env:RELEASE_TAG -ne "v$version") { throw 'Tag and package version differ' }
-          $tagCommit = git rev-parse "$env:RELEASE_TAG^{}"
-          if ($LASTEXITCODE -ne 0 -or $tagCommit -ne (git rev-parse HEAD)) { throw 'Checkout and release tag differ' }
-      - name: Build and verify Windows packages
+      - name: Build and test application
         shell: pwsh
         run: |
           ./scripts/build.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Windows source build failed' }
-          pnpm exec electron-builder --win nsis portable --publish never
-          if ($LASTEXITCODE -ne 0) { throw 'Windows build or package verification failed' }
+          pnpm package
+          if ($LASTEXITCODE -ne 0) { throw 'Windows packages failed' }
           node scripts/verify-package.mjs
-          if ($LASTEXITCODE -ne 0) { throw 'Packaged resource verification failed' }
-      - name: Prepare source, validation and checksums
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged identity verification failed' }
+      - name: Validate isolated installation and recovery
         shell: pwsh
         run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          git archive --format=zip --prefix=NetworkToolbox/ -o "release/NetworkToolbox-$version-Source.zip" HEAD
-          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
-          $validation = @(
-            "NetworkToolbox $version"
-            "Source commit: $(git rev-parse HEAD)"
-            'Renderer typecheck, lint, tests and production build: passed.'
-            'Native self-tests and packaged identity/resource verification: passed.'
-            'Build: Windows 11 x64 application, unsigned.'
-            'Live-device and native pointer interaction limits: docs/ui-validation-2026-10-24.md.'
-            'Installer artwork and isolated local QA: docs/validation-0.2.3.md; uninstaller UI capture was blocked by the desktop automation tool.'
-            'The CI build does not install the application, accept UAC or change live network configuration.'
-          )
-          [IO.File]::WriteAllLines("$PWD/release/NetworkToolbox-$version-Validation.txt", $validation, [Text.UTF8Encoding]::new($false))
-          $files = @(
-            "release/NetworkToolbox-Setup-$version.exe"
-            "release/NetworkToolbox-$version-Portable.exe"
-            "release/NetworkToolbox-$version-Source.zip"
-            "release/NetworkToolbox-$version-Validation.txt"
-          )
-          $checksums = foreach ($file in $files) {
-            $digest = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$digest  $([IO.Path]::GetFileName($file))"
-          }
-          [IO.File]::WriteAllLines("$PWD/release/SHA256SUMS.txt", $checksums, [Text.UTF8Encoding]::new($false))
-      - name: Upload and publish verified release
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Tag and application version differ' }
+          ./installer/inno/test.ps1 -PayloadDirectory release/win-unpacked -Version $version
+          ./installer/inno/test-custom.ps1 -PayloadDirectory release/win-unpacked -Version $version
+      - name: Publish and retain the latest version
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          $tagName = $env:RELEASE_TAG
-          $files = @(
-            "release/NetworkToolbox-Setup-$version.exe"
-            "release/NetworkToolbox-$version-Portable.exe"
-            "release/NetworkToolbox-$version-Source.zip"
-            "release/NetworkToolbox-$version-Validation.txt"
-            'release/SHA256SUMS.txt'
-          )
-          $releaseList = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'Release draft lookup failed' }
-          $releaseMatches = @($releaseList | Where-Object tag_name -eq $tagName)
-          if ($releaseMatches.Count -ne 1 -or -not $releaseMatches[0].draft) { throw 'Expected an unpublished release draft' }
-          gh release upload $tagName @files --repo $env:GITHUB_REPOSITORY --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
-          $releaseList = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
-          if ($LASTEXITCODE -ne 0) { throw 'Uploaded asset lookup failed' }
-          $releaseMatches = @($releaseList | Where-Object tag_name -eq $tagName)
-          if ($releaseMatches.Count -ne 1 -or -not $releaseMatches[0].draft) { throw 'Expected the release to remain unpublished during verification' }
-          $releaseData = $releaseMatches[0]
-          foreach ($file in $files) {
-            $name = [IO.Path]::GetFileName($file)
-            $asset = @($releaseData.assets | Where-Object name -eq $name)
-            $expectedDigest = 'sha256:' + (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($asset.Count -ne 1 -or $asset[0].digest -ne $expectedDigest -or $asset[0].size -ne (Get-Item -LiteralPath $file).Length) {
-              throw "Uploaded asset failed verification: $name"
-            }
-          }
-          gh release edit $tagName --repo $env:GITHUB_REPOSITORY --draft=false --latest
-          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          git archive --format=zip --prefix=NetworkToolbox/ -o "release/NetworkToolbox-$version-Source.zip" HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
+          $files = @("release/NetworkToolbox-Setup-$version.exe", "release/NetworkToolbox-Setup-$version.exe.sha256", "release/NetworkToolbox-Setup-$version.exe.build.json", "release/NetworkToolbox-$version-windows-x64.zip", "release/NetworkToolbox-$version-Source.zip")
+          ./scripts/publish-verified-release.ps1 -Version $version -Title "NetworkToolbox $version" -NotesFile "docs/releases/$version.md" -Files $files -KeepLatestOnly

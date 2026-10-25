@@ -1,0 +1,21 @@
+{
+  "Name": "NetworkToolbox",
+  "Description": "查看 Wi-Fi 信道，诊断网络连接",
+  "Kind": "network",
+  "Id": "local.network.toolbox",
+  "Executable": "NetworkToolbox.exe",
+  "UserFolder": "NetworkToolbox",
+  "AppUserModelId": "local.network.toolbox",
+  "MinimumWindows": "10.0.22000",
+  "Icon": "assets/icon.ico",
+  "BrandImage": "assets/icon.png",
+  "ShortcutIcon": "resources/app-icon-${version}.ico",
+  "Bootstrapper": "",
+  "DataDirectory": "{userappdata}\\NetworkToolbox",
+  "LegacyKey": "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\c8b42d83-40a1-5f2e-b3e6-92083fa87101",
+  "InstallingMutex": "Local\\NetworkToolbox.Installing",
+  "RunningMutex": "Local\\NetworkToolbox.Running",
+  "WelcomeText": "查看 Wi-Fi 信道、诊断网络连接、测试吞吐并管理本机网络配置。%n%n需要 Windows 11 x64，已包含 Electron 和 .NET 运行库。",
+  "ClosePrompt": "NetworkToolbox 正在运行。继续后会请求正常退出并等待后台任务结束。请先保存需要的结果；无法退出时会停止安装。",
+  "LegacyFiles": ["Uninstall NetworkToolbox.exe", "Uninstall 网络工具箱.exe", "网络工具箱.exe", "uninstallerIcon.ico", "resources/elevate.exe"]
+}

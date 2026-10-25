@@ -3,12 +3,69 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { exportInstallerArtwork, installerArtwork } from './installer-artwork.mjs';
+import { verifyWindowFrame } from './build-window-frame.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
+await verifyWindowFrame();
 const assets = path.join(root, 'assets');
 const sourceName = 'cinna-network-source.png';
 const source = await fs.readFile(path.join(assets, sourceName));
 const metadata = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
+const windowShell = JSON.parse(
+  await fs.readFile(path.join(root, 'desktop/window-shell.json'), 'utf8'),
+);
+const { titlebar, sidebar, content, controls } = windowShell;
+const shellTokens = {
+  'titlebar-height': titlebar.height,
+  'caption-button-width': titlebar.captionButtonWidth,
+  'caption-button-height': titlebar.captionButtonHeight,
+  'caption-glyph-size': titlebar.captionGlyphSize,
+  'caption-glyph-stroke': titlebar.captionGlyphStroke,
+  'titlebar-icon-size': titlebar.iconSize,
+  'titlebar-icon-inset': titlebar.iconLeftInset,
+  'titlebar-name-gap': titlebar.iconNameGap,
+  'titlebar-name-size': titlebar.nameFontSize,
+  'sidebar-width': sidebar.expandedWidth,
+  'sidebar-compact-width': sidebar.collapsedWidth,
+  'nav-height': sidebar.rowHeight,
+  'nav-icon-size': sidebar.iconSize,
+  'nav-icon-width': sidebar.iconColumnWidth,
+  'nav-inset': sidebar.horizontalInset,
+  'nav-top': sidebar.topInset,
+  'sidebar-footer-inset': sidebar.footer.inset,
+  'sidebar-footer-height': sidebar.footer.height,
+  'sidebar-footer-gap': sidebar.footer.gap,
+  'sidebar-settings-width': sidebar.footer.settingsExpandedWidth,
+  'sidebar-settings-collapsed': sidebar.footer.settingsCollapsedSize,
+  'sidebar-pin-size': sidebar.footer.pinSize,
+  'toolbar-height': content.toolbarHeight,
+  'toolbar-padding': content.toolbarHorizontalPadding,
+  'business-status-size': content.businessStatusFontSize,
+  'business-status-dot-size': content.businessStatusDotSize,
+  'business-status-gap': content.businessStatusGap,
+  'space-page': content.pagePadding,
+  'text-body': content.bodyFontSize,
+  'text-caption': content.auxiliaryFontSize,
+  'text-group': content.sectionTitleSize,
+  'text-title': content.pageTitleSize,
+  'control-height': controls.height,
+  'radius-control': controls.radius,
+  'radius-panel': controls.panelRadius,
+  'menu-item-height': controls.menuItemHeight,
+  'menu-inset': controls.menuInset,
+  'menu-radius': controls.menuRadius,
+  'settings-field-width': controls.settingsFieldWidth,
+  'label-gap': controls.labelBottomGap,
+  'space-section': content.sectionGap,
+};
+await fs.writeFile(
+  path.join(root, 'src/window-shell.css'),
+  '/* Generated from desktop/window-shell.json by pnpm assets. */\n:root {\n' +
+    Object.entries(shellTokens)
+      .map(([key, value]) => `  --${key}: ${value}px;`)
+      .join('\n') +
+    `\n  --titlebar-name-weight: ${titlebar.nameFontWeight};\n  --nav-font-weight: ${sidebar.fontWeight};\n  --nav-icon-stroke: ${sidebar.iconStroke};\n  --page-title-weight: ${content.pageTitleFontWeight};\n  --section-title-weight: ${content.sectionTitleFontWeight};\n}\n`,
+);
 const master = await sharp(source)
   .resize(1024, 1024, { fit: 'cover', kernel: 'lanczos3' })
   .toColourspace('srgb')
@@ -90,7 +147,7 @@ function themeToken(block, name) {
   return value;
 }
 const windowTheme = {
-  height: Number.parseInt(themeToken(themeBlocks[0], 'titlebar-height'), 10),
+  height: titlebar.height,
   ...Object.fromEntries(
     ['light', 'dark'].map((name, index) => [
       name,

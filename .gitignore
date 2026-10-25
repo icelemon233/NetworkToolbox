@@ -5,6 +5,10 @@ native/**/bin/
 native/**/obj/
 native/publish/
 .runtime/
+.deps/
+.installer-build/
+desktop/win32/*.node
+desktop/win32/window-frame-build.json
 *.user
 desktop/installer-files.nsh
 .env

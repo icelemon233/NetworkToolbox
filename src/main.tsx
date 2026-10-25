@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AppProvider } from './shared/context';
 import './styles.css';
+import { installInputModality } from './shared/input-modality';
+const disposeInputModality = installInputModality();
+import.meta.hot?.dispose(disposeInputModality);
 class Boundary extends Component<{ children: ReactNode }, { error: string }> {
   state = { error: '' };
   static getDerivedStateFromError(error: Error) {

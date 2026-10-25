@@ -10,11 +10,11 @@
 
 [下载 Windows 版本](https://github.com/icelemon233/NetworkToolbox/releases/latest)。
 
-v0.2.3 安装版已统一欢迎页、页头和卸载向导的 Cinna 配图。
+v1.0.0 安装版已统一欢迎页、页头和卸载向导的 Cinna 配图。
 
 - `NetworkToolbox-<版本>-Portable.exe`：直接运行，无需安装 Node.js 或 .NET。
 - `NetworkToolbox-Setup-<版本>.exe`：安装版，可选择安装目录。
-- 默认关闭窗口会进入托盘；v0.2.2 可在设置中改为关闭时退出。在应用设置或托盘菜单中选择“退出”可结束应用。
+- 默认关闭窗口会进入托盘；v1.0.0 可在设置中改为关闭时退出。在应用设置或托盘菜单中选择“退出”可结束应用。
 
 打开应用会读取本机连接和 Windows 缓存。附近热点主动扫描、外网测试、设备发现与后台监测均由用户手动开始。
 

@@ -8,9 +8,10 @@
     // A blocked store still permits the current Windows theme.
   }
   document.documentElement.dataset.theme =
-    theme === 'system'
+    globalThis.networkToolbox?.nativeTheme ??
+    (theme === 'system'
       ? matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'
         : 'light'
-      : theme;
+      : theme);
 })();

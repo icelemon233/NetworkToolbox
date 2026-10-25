@@ -7,7 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import { bridge } from './bridge';
+import { bridge, isUiQa, isDesktop } from './bridge';
 import { row, text, type Overview, type WifiScan, type Job } from './models';
 import { readTheme, savePreference, type Theme, type CloseBehavior } from './preferences';
 interface AppState {
@@ -42,10 +42,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [jobs, setJobs] = useState<Job[]>([]),
     [samples, setSamples] = useState<Record<string, unknown[]>>({}),
     [toast, setToast] = useState(''),
-    [page, setPage] = useState('overview'),
+    [page, setPage] = useState(isUiQa ? 'settings' : 'overview'),
     [adapterId, setAdapterId] = useState(''),
     [rates, setRates] = useState<{ time: number; down: number; up: number }[]>([]),
     [theme, setTheme] = useState<Theme>(readTheme),
+    [preferencesReady, setPreferencesReady] = useState(!isDesktop),
     [closeBehavior, setCloseBehaviorState] = useState<CloseBehavior | null>(null);
   const selected = useRef(adapterId);
   selected.current = adapterId;
@@ -118,6 +119,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [notify]);
   useEffect(() => {
     mounted.current = true;
+    if (isUiQa)
+      return () => {
+        mounted.current = false;
+      };
     void refresh();
     void bridge
       .call<Job[]>('jobs.list')
@@ -159,6 +164,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [toast]);
   useEffect(() => {
+    if (!preferencesReady) return;
     if (!savePreference('theme', theme))
       setError('主题已切换，但无法保存偏好。请检查本机存储是否可用。');
     const mq = matchMedia('(prefers-color-scheme: dark)');
@@ -171,7 +177,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme]);
+  }, [theme, preferencesReady]);
   useEffect(() => {
     let current = true;
     void bridge
@@ -179,10 +185,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .then((preferences) => {
         if (!current) return;
         setCloseBehaviorState(preferences.closeBehavior);
+        if (isDesktop) setTheme(preferences.theme);
+        setPreferencesReady(true);
         if (preferences.error) setError(preferences.error);
       })
       .catch((e: unknown) => {
-        if (current) setError(e instanceof Error ? e.message : '窗口偏好读取失败');
+        if (current) {
+          setError(e instanceof Error ? e.message : '窗口偏好读取失败');
+          setPreferencesReady(true);
+        }
       });
     return () => {
       current = false;

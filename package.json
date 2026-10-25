@@ -1,6 +1,6 @@
 {
   "name": "network-toolbox",
-  "version": "0.2.3",
+  "version": "1.0.0",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
@@ -23,7 +23,8 @@
     "preview:local": "node scripts/preview.mjs",
     "desktop": "electron .",
     "package:dir": "electron-builder --win --dir --publish never",
-    "package": "electron-builder --win nsis portable --publish never"
+    "package": "electron-builder --win zip --publish never && pwsh -NoProfile -File scripts/build-installer.ps1",
+    "package:installer": "pwsh -NoProfile -File scripts/build-installer.ps1"
   },
   "dependencies": {
     "@radix-ui/react-select": "2.4.1",
@@ -64,12 +65,18 @@
       "desktop/preload.cjs",
       "desktop/native-client.cjs",
       "desktop/window-preferences.cjs",
+      "desktop/window-shell.cjs",
+      "desktop/window-shell.json",
+      "desktop/win32/window-frame.node",
       "desktop/product.json",
       "assets/icon.png",
       "assets/icon.ico",
       "assets/tray.png",
       "assets/brand-manifest.json",
       "package.json"
+    ],
+    "asarUnpack": [
+      "desktop/win32/window-frame.node"
     ],
     "afterPack": "desktop/after-pack.cjs",
     "extraResources": [
@@ -88,32 +95,12 @@
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        "zip"
       ],
+      "artifactName": "NetworkToolbox-${version}-windows-x64.${ext}",
       "icon": "assets/icon.ico",
       "requestedExecutionLevel": "asInvoker",
       "signExecutable": false
-    },
-    "nsis": {
-      "include": "desktop/installer.nsh",
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "installerHeaderIcon": "assets/icon.ico",
-      "installerHeader": "assets/installer-header.bmp",
-      "installerSidebar": "assets/installer-sidebar.bmp",
-      "uninstallerSidebar": "assets/installer-sidebar.bmp",
-      "installerLanguages": [
-        "zh_CN"
-      ],
-      "deleteAppDataOnUninstall": false,
-      "artifactName": "NetworkToolbox-Setup-${version}.${ext}"
-    },
-    "portable": {
-      "artifactName": "NetworkToolbox-${version}-Portable.${ext}"
     }
   }
 }

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 const root = path.resolve(import.meta.dirname, '..');
 const require = createRequire(import.meta.url);
 const packages = await fs.readdir(path.join(root, 'node_modules/.pnpm'));
@@ -41,21 +42,31 @@ async function verifyRenderer(directory) {
   }
 }
 await verifyRenderer(path.join(root, 'dist'));
-const removal = await fs.readFile(path.join(root, 'desktop/installer-files.nsh'), 'utf8');
-async function verifyRemoval(directory) {
+const setup =
+  process.env.NETWORKTOOLBOX_SETUP || `release/NetworkToolbox-Setup-${source.version}.exe`;
+const installer = JSON.parse(await fs.readFile(path.resolve(root, `${setup}.build.json`), 'utf8'));
+assert.equal(installer.engine, 'Inno Setup');
+assert.equal(installer.version, source.version);
+const payload = new Map(installer.files.map((file) => [path.normalize(file.path), file]));
+async function verifyPayload(directory) {
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) await verifyRemoval(file);
+    if (entry.isDirectory()) await verifyPayload(file);
     else {
       const relative = path.relative(path.join(root, 'release/win-unpacked'), file);
-      assert.ok(
-        removal.includes(`Delete "$INSTDIR\\${relative}"`),
-        `${relative} is missing from the safe uninstaller file list`,
+      const manifest = payload.get(relative);
+      assert.ok(manifest, `${relative} is missing from the installer payload`);
+      assert.equal(
+        createHash('sha256')
+          .update(await fs.readFile(file))
+          .digest('hex'),
+        manifest.sha256,
+        `${relative} differs from the installer payload`,
       );
     }
   }
 }
-await verifyRemoval(path.join(root, 'release/win-unpacked'));
+await verifyPayload(path.join(root, 'release/win-unpacked'));
 const identity = JSON.parse(asar.extractFile(packedFile, 'desktop/product.json'));
 const generatedIdentity = JSON.parse(
   await fs.readFile(path.join(root, 'desktop/product.json'), 'utf8'),
@@ -112,8 +123,7 @@ const layers = Array.from({ length: count }, (_, i) => {
 for (const file of [
   'release/win-unpacked/NetworkToolbox.exe',
   'release/win-unpacked/resources/native/NetworkToolbox.Native.exe',
-  `release/NetworkToolbox-Setup-${source.version}.exe`,
-  `release/NetworkToolbox-${source.version}-Portable.exe`,
+  setup,
   ...process.argv.slice(2),
 ]) {
   const bytes = await fs.readFile(path.resolve(root, file));

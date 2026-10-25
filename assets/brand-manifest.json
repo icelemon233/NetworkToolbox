@@ -1,6 +1,6 @@
 {
   "product": "NetworkToolbox",
-  "version": "0.2.3",
+  "version": "1.0.0",
   "identity": "Cinna with a Wi-Fi and Ethernet network analyzer",
   "variant": "network-analyzer",
   "source": "cinna-network-source.png",

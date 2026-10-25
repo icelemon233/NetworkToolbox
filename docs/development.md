@@ -23,8 +23,14 @@ pnpm package
 
 `node scripts/preview.mjs` is a read-only localhost renderer preview. Packaged production requires the native bridge and does not substitute fixture data.
 
-The NSIS hook uses a temporary copy of the native worker to ask the exact installed application to exit and wait for processes in that installation directory. It aborts on timeout; it does not kill processes. `desktop/after-pack.cjs` derives an explicit removal list from the packaged files. Unrelated installation-directory files and the stable user-data directory are preserved.
+`pnpm package` builds a portable ZIP and an Inno Setup 7.1.0 installer. It does not use the NSIS or NSIS-portable targets. The [shared native installer](../installer/inno/README.md) always offers current-user/all-users installation, an editable destination and separate desktop/Start menu shortcut choices. It follows Windows light/dark appearance. The compiler is verified and extracted in portable mode.
+
+The installer uses a temporary native worker to request normal exit of the exact installed app and waits for the app and worker before writing files. It stops on timeout. Silent setup refuses a running app unless `/CLOSEAPP` requests normal exit. The old registration and known uninstaller are retired after success. Inno's uninstall log removes owned files and preserves unrelated files and `%APPDATA%\\NetworkToolbox`.
+
+Run `pwsh -File installer/inno/test.ps1 -PayloadDirectory release/win-unpacked -Version <version>` for isolated installation, shortcut, migration and uninstall checks. `scripts/build-installer.ps1 -QaRoot .runtime/inno-qa-<GUID>` creates a separate visible native installer. QA never installs shared runtimes or uses real application data. All-users UAC remains a separate interactive check.
 
 Keep source and lockfiles in Git. Dependencies, build output and live-test state are excluded. Distributable Windows binaries belong to a versioned GitHub Release with checksums; the release tag must point to its corresponding source commit. Preserve the documented distinction between live checks, protocol fixtures and unverified privileged or device operations.
 
 Module and privacy rules are in [AGENTS.md](../AGENTS.md). The Windows CI performs source checks; final portable/installer UI and privileged operations require separate machine verification.
+
+The full-window scene, settings drawer, red cancellation button, completion actions and upgrade recovery share one implementation. Run `installer/inno/test-custom.ps1` alongside the existing installer tests. Current evidence and manual verification limits are in [custom-installer-validation.md](custom-installer-validation.md).

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, GitCompareArrows, Trash2, FileText } from 'lucide-react';
-import { bridge, isDesktop } from '../shared/bridge';
+import { RefreshCw, GitCompareArrows, Trash2, FileText, Monitor, Sun, Moon } from 'lucide-react';
+import { bridge, isDesktop, isUiQa } from '../shared/bridge';
 import { productName, productVersion, developer } from '../shared/product';
 import { useAction, useApp } from '../shared/context';
 import { row, list, text, date, type Job } from '../shared/models';
@@ -250,7 +250,6 @@ export function SettingsPage() {
   const meta = row(action.data);
   return (
     <>
-      <PageHeader title="应用设置" />
       {action.error && (
         <Notice tone="error">
           {action.error}{' '}
@@ -264,6 +263,15 @@ export function SettingsPage() {
           <div className="settings-body">
             <Field label="主题">
               <Select
+                leadingIcon={
+                  app.theme === 'system' ? (
+                    <Monitor size={18} />
+                  ) : app.theme === 'light' ? (
+                    <Sun size={18} />
+                  ) : (
+                    <Moon size={18} />
+                  )
+                }
                 value={app.theme}
                 onValueChange={(selectedValue) => {
                   if (
@@ -274,14 +282,14 @@ export function SettingsPage() {
                     app.setTheme(selectedValue);
                 }}
               >
-                <option value="system">跟随 Windows</option>
+                <option value="system">跟随系统</option>
                 <option value="light">浅色</option>
                 <option value="dark">深色</option>
               </Select>
             </Field>
           </div>
         </Card>
-        <Card title="后台运行" className="settings-section">
+        <Card title="窗口与退出" className="settings-section">
           <div className="settings-body">
             <Field
               label="关闭窗口时"
@@ -303,6 +311,7 @@ export function SettingsPage() {
                 <option value="quit">退出应用</option>
               </Select>
             </Field>
+            <p className="form-hint">最小化保留在任务栏。</p>
             <KeyValues
               items={[
                 ['外网检测', '由你手动开始'],
@@ -346,12 +355,14 @@ export function SettingsPage() {
             />
           </div>
         </Card>
-        <Card title={`关于 ${productName}`} className="settings-section">
+        <Card title="关于" className="settings-section">
           <div className="settings-body">
+            <p>
+              {productName} {productVersion}
+            </p>
+            <p className="about-developer">开发者 {developer}</p>
             <KeyValues
               items={[
-                ['版本', productVersion],
-                ['开发者', developer],
                 ['支持系统', 'Windows 11 x64'],
                 ['首个路由器适配', '小米 AX3000T · RD03 · CN · 1.0.84'],
                 [
@@ -367,6 +378,7 @@ export function SettingsPage() {
               ]}
             />
             <Button
+              disabled={isUiQa}
               onClick={() =>
                 void windowAction.run(() => bridge.openExternal('ms-settings:privacy-location'))
               }

@@ -15,16 +15,19 @@ import {
   ListTodo,
   Settings,
   ArrowDownToLine,
-  PanelLeftClose,
   PanelLeftOpen,
+  Pin,
+  PinOff,
   X,
 } from 'lucide-react';
 import { useApp } from './shared/context';
-import { bridge, isPreview, isDesktop } from './shared/bridge';
-import { readPreference, savePreference } from './shared/preferences';
+import { bridge, isPreview, isDesktop, isUiQa } from './shared/bridge';
+import { useSidebar } from './shared/useSidebar';
 import { useModalDialog } from './shared/dialog';
 import { Select, ErrorNotice } from './shared/ui';
-import { productName, productVersion } from './shared/product';
+import { row } from './shared/models';
+import { markPointerInput } from './shared/input-modality';
+import { productName } from './shared/product';
 import appIcon from '../assets/icon.png';
 import { OverviewPage } from './features/Overview';
 import { WifiPage } from './features/Wifi';
@@ -82,8 +85,26 @@ const pages: Record<string, () => React.JSX.Element> = {
   tasks: TasksPage,
   settings: SettingsPage,
 };
-function SidebarContent({ id, onNavigate }: { id: string; onNavigate?: () => void }) {
+function SidebarContent({
+  id,
+  onNavigate,
+  pinned,
+  expanded = true,
+  onTogglePin,
+}: {
+  id: string;
+  onNavigate?: () => void;
+  pinned?: boolean;
+  expanded?: boolean;
+  onTogglePin?: () => void;
+}) {
   const app = useApp();
+  const settings = useRef<HTMLButtonElement>(null);
+  const pin = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!expanded && pin.current === document.activeElement)
+      settings.current?.focus({ preventScroll: true });
+  }, [expanded]);
   const activeJobs = app.jobs.filter((j) => j.state === 'running').length;
   function go(page: string) {
     app.go(page);
@@ -93,8 +114,7 @@ function SidebarContent({ id, onNavigate }: { id: string; onNavigate?: () => voi
     <>
       <nav id={id} aria-label="工具导航">
         {groups.map((group) => (
-          <div key={group.label} className="nav-group">
-            <span className="nav-label">{group.label}</span>
+          <div key={group.label} className="nav-group" role="group" aria-label={group.label}>
             {group.items.map((item) => (
               <button
                 key={item.id}
@@ -104,42 +124,71 @@ function SidebarContent({ id, onNavigate }: { id: string; onNavigate?: () => voi
                 className={`nav-item ${app.page === item.id ? 'active' : ''}`}
                 onClick={() => go(item.id)}
               >
-                <item.icon size={18} />
-                <span>{item.label}</span>
+                <span className="nav-icon">
+                  <item.icon size={18} />
+                </span>
+                <span className="nav-text">{item.label}</span>
                 {item.id === 'tasks' && activeJobs > 0 && <b className="nav-count">{activeJobs}</b>}
               </button>
             ))}
           </div>
         ))}
       </nav>
-      <div className="sidebar-bottom">
+      <div className="sidebar-footer">
         <button
-          className={`nav-item ${app.page === 'settings' ? 'active' : ''}`}
-          aria-label="应用设置"
+          ref={settings}
+          className={`nav-item settings-nav ${app.page === 'settings' ? 'active' : ''}`}
+          aria-label="设置"
           aria-current={app.page === 'settings' ? 'page' : undefined}
-          title="应用设置"
+          title="设置"
           onClick={() => go('settings')}
         >
-          <Settings size={18} />
-          <span>应用设置</span>
-          <small>{productVersion}</small>
+          <span className="nav-icon">
+            <Settings size={18} />
+          </span>
+          <span className="nav-text">设置</span>
         </button>
+        {onTogglePin && (
+          <button
+            ref={pin}
+            className="pin-toggle"
+            hidden={!expanded}
+            aria-label={pinned ? '取消固定侧栏' : '固定侧栏'}
+            title={pinned ? '取消固定侧栏' : '固定侧栏'}
+            aria-pressed={pinned}
+            onClick={onTogglePin}
+          >
+            {pinned ? <PinOff size={18} /> : <Pin size={18} />}
+          </button>
+        )}
       </div>
     </>
   );
 }
 export default function App() {
   const app = useApp();
+  const [maximized, setMaximized] = useState(false);
+  const [caption, setCaption] = useState({ hovered: 0, pressed: 0 });
+  useEffect(
+    () =>
+      bridge.onEvent((event) => {
+        const data = row(event.data);
+        if (
+          event.name === 'window-pointer' ||
+          (event.name === 'window-caption' && Number(data.pressed) !== 0)
+        )
+          markPointerInput();
+        if (event.name === 'window-state') setMaximized(data.maximized === true);
+        if (event.name === 'window-caption')
+          setCaption({ hovered: Number(data.hovered), pressed: Number(data.pressed) });
+      }),
+    [],
+  );
   const [search, setSearch] = useState(''),
     [searchOpen, setSearchOpen] = useState(false),
     [navigationOpen, setNavigationOpen] = useState(false),
-    [narrow, setNarrow] = useState(() => matchMedia('(max-width: 700px)').matches),
-    [compact, setCompact] = useState(() => matchMedia('(max-width: 1040px)').matches),
-    [sidebarPreference, setSidebarPreference] = useState<boolean | null>(() => {
-      const saved = readPreference('sidebar-collapsed');
-      return saved === null ? null : saved === 'true';
-    });
-  const collapsed = narrow || (sidebarPreference ?? compact);
+    [narrow, setNarrow] = useState(() => matchMedia('(max-width: 700px)').matches);
+  const sidebar = useSidebar(narrow, () => app.notify('侧栏已切换，但无法保存固定偏好'));
   const searchDialog = useModalDialog(searchOpen);
   const navigationDialog = useModalDialog(navigationOpen && narrow);
   const results = useRef<HTMLDivElement>(null);
@@ -151,12 +200,6 @@ export default function App() {
     app.go(id);
     closeSearch();
   }
-  useEffect(() => {
-    const mq = matchMedia('(max-width: 1040px)');
-    const update = () => setCompact(mq.matches);
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
-  }, []);
   useEffect(() => {
     const mq = matchMedia('(max-width: 700px)');
     const update = () => {
@@ -170,8 +213,12 @@ export default function App() {
   const Page = pages[app.page] ?? OverviewPage;
   const all = [
     ...groups.flatMap((g) => g.items),
-    { id: 'settings', label: '应用设置', icon: Settings },
+    { id: 'settings', label: '设置', icon: Settings },
   ].filter((i) => i.label.toLowerCase().includes(search.toLowerCase()));
+  const pageTitle =
+    [...groups.flatMap((group) => group.items), { id: 'settings', label: '设置' }].find(
+      (item) => item.id === app.page,
+    )?.label ?? '网络总览';
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -187,53 +234,83 @@ export default function App() {
     document.querySelector('.main-scroll')?.scrollTo(0, 0);
   }, [app.page]);
   return (
-    <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
+    <div
+      className={`app-shell ${!sidebar.pinned ? 'sidebar-unpinned' : ''} ${sidebar.expanded ? 'sidebar-expanded' : ''} ${narrow ? 'sidebar-narrow' : ''}`}
+    >
       <header className="window-titlebar">
-        <img src={appIcon} alt="" />
-        <span>{productName}</span>
+        <div className="titlebar-brand">
+          <img src={appIcon} alt="" />
+          <span>{productName}</span>
+        </div>
+        <div className="caption-controls">
+          {(
+            [
+              ['minimize', 8, '最小化'],
+              ['maximize', 9, maximized ? '还原' : '最大化'],
+              ['close', 20, '关闭'],
+            ] as const
+          ).map(([action, hit, label]) => (
+            <button
+              key={action}
+              className={`caption-control ${action === 'close' ? 'caption-close' : ''} ${caption.hovered === hit ? 'caption-hover' : ''} ${caption.pressed === hit && caption.hovered === hit ? 'caption-pressed' : ''}`}
+              type="button"
+              aria-label={label}
+              title={label}
+              disabled={!isDesktop}
+              onClick={() => void bridge.window(action)}
+            >
+              <span
+                className={`caption-glyph glyph-${action === 'maximize' && maximized ? 'restore' : action}`}
+                aria-hidden="true"
+              />
+            </button>
+          ))}
+        </div>
       </header>
       <div className="app-body">
-        <aside className="sidebar">
-          <SidebarContent id="tool-navigation" />
-        </aside>
+        {!narrow && (
+          <div className="sidebar-slot">
+            <aside className="sidebar" ref={sidebar.ref} {...sidebar.events}>
+              <SidebarContent
+                id="tool-navigation"
+                pinned={sidebar.pinned}
+                expanded={sidebar.expanded}
+                onTogglePin={sidebar.togglePin}
+              />
+            </aside>
+          </div>
+        )}
         <div className="workspace">
           <header className="topbar">
             <div className="topbar-left">
+              {narrow && (
+                <button
+                  className="icon-button"
+                  aria-label="展开工具导航"
+                  title="展开工具导航"
+                  aria-expanded={navigationOpen}
+                  aria-controls="tool-navigation-drawer"
+                  onClick={() => setNavigationOpen(true)}
+                >
+                  <PanelLeftOpen size={18} />
+                </button>
+              )}
+              <h1>{pageTitle}</h1>
+            </div>
+            <div className="topbar-right">
+              {isUiQa && <span className="business-status">界面验收 · 检测已停用</span>}
               <button
-                className="icon-button"
-                aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
-                title={collapsed ? '展开侧栏' : '收起侧栏'}
-                aria-expanded={narrow ? navigationOpen : !collapsed}
-                aria-controls={narrow ? 'tool-navigation-drawer' : 'tool-navigation'}
-                onClick={() => {
-                  if (narrow) {
-                    setNavigationOpen(true);
-                    return;
-                  }
-                  const next = !collapsed;
-                  setSidebarPreference(next);
-                  if (!savePreference('sidebar-collapsed', String(next)))
-                    app.notify('侧栏已切换，但无法保存偏好');
-                }}
-              >
-                {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-              </button>
-              <button
-                className="tool-search"
+                className="icon-button tool-search"
                 aria-label="查找工具"
                 title="查找工具（Ctrl + K）"
                 onClick={() => setSearchOpen(true)}
               >
                 <Search size={18} />
-                <span>查找工具</span>
-                <kbd>Ctrl + K</kbd>
               </button>
-            </div>
-            <div className="topbar-right">
               {app.overview && (
                 <div className="adapter-picker">
                   <span
-                    className={`status-dot ${app.overview.adapters.find((a) => a.id === app.adapterId)?.status === 'Up' ? '' : 'off'}`}
+                    className={`status-dot business-status-dot ${app.overview.adapters.find((a) => a.id === app.adapterId)?.status === 'Up' ? '' : 'off'}`}
                   />
                   <Select
                     aria-label="当前网络适配器"
@@ -271,7 +348,7 @@ export default function App() {
               </button>
             </div>
           </header>
-          <main className="main-scroll">
+          <main className={`main-scroll ${app.page === 'settings' ? 'settings-scroll' : ''}`}>
             <div className="page-content">
               {isPreview && (
                 <div className="preview-note">
@@ -284,9 +361,9 @@ export default function App() {
             <footer className="app-footer">
               <span>
                 <i className="status-dot" />
-                本机数据 · Windows 原生采集
+                {isUiQa ? '隔离界面验收' : '本机数据 · Windows 原生采集'}
               </span>
-              <span>联网测试由你手动开始</span>
+              <span>{isUiQa ? '本机服务未启动' : '联网测试由你手动开始'}</span>
             </footer>
           </main>
         </div>

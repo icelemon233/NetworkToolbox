@@ -7,11 +7,52 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { loadWindowPreferences } = require('../desktop/window-preferences.cjs');
+const { uiQaSession } = require('../desktop/window-shell.cjs');
 const root = path.resolve(import.meta.dirname, '..');
 const directory = path.join(root, '.runtime', 'window-preferences-tests');
 await fs.mkdir(directory, { recursive: true });
 const sandbox = await fs.mkdtemp(path.join(directory, 'run-'));
 const fixture = (name) => path.join(sandbox, name);
+
+test('UI QA requires its own absolute profile and never changes normal application paths', () => {
+  const appData = fixture('roaming');
+  assert.equal(uiQaSession(['--user-data-dir=elsewhere'], appData), null);
+  for (const value of [
+    '',
+    'relative',
+    appData,
+    path.join(appData, 'NetworkToolbox'),
+    path.join(appData, 'NetworkToolbox', 'qa'),
+  ]) {
+    assert.throws(() => uiQaSession(['--ui-qa', `--user-data-dir=${value}`], appData), /独立/);
+  }
+  assert.deepEqual(uiQaSession(['--ui-qa', `--user-data-dir=${fixture('qa-profile')}`], appData), {
+    directory: fixture('qa-profile'),
+    width: 1180,
+    height: 780,
+    theme: 'dark',
+    hidden: false,
+  });
+  assert.throws(
+    () =>
+      uiQaSession(
+        ['--ui-qa', `--user-data-dir=${fixture('qa-profile')}`, '--ui-qa-size=0x0'],
+        appData,
+      ),
+    /逻辑像素/,
+  );
+});
+
+test(
+  'native resize module rejects malformed handles and foreign or missing windows',
+  { skip: process.platform !== 'win32' },
+  () => {
+    const frame = require('../desktop/win32/window-frame.node');
+    assert.throws(() => frame.attach('anything'), /buffer/);
+    assert.throws(() => frame.attach(Buffer.alloc(0)), /buffer/);
+    assert.throws(() => frame.attach(Buffer.alloc(8), 44, 46), /own UI-thread/);
+  },
+);
 
 test('new users follow Windows and keep the existing tray behavior', async () => {
   const store = await loadWindowPreferences(fixture('defaults'));
@@ -129,4 +170,36 @@ test('preload keeps native error details without the Electron transport prefix',
   });
   failure = '当前系统不支持此操作';
   await assert.rejects(exposed.call('meta'), { message: failure });
+});
+
+test('preload and first paint use the current host theme instead of an old renderer cache', async () => {
+  const preload = await fs.readFile(path.join(root, 'desktop/preload.cjs'), 'utf8');
+  let exposed;
+  vm.runInNewContext(preload, {
+    process: { argv: ['--toolbox-initial-theme=dark', '--toolbox-native-theme=dark'] },
+    require: () => ({
+      contextBridge: {
+        exposeInMainWorld: (_name, value) => {
+          exposed = value;
+        },
+      },
+      ipcRenderer: {
+        sendSync: (channel) => {
+          assert.equal(channel, 'toolbox:startup');
+          return { theme: 'light', nativeTheme: 'light', uiQa: true };
+        },
+      },
+    }),
+  });
+  assert.equal(exposed.initialTheme, 'light');
+  assert.equal(exposed.nativeTheme, 'light');
+  assert.equal(exposed.uiQa, true);
+  const document = { documentElement: { dataset: {} } };
+  vm.runInNewContext(await fs.readFile(path.join(root, 'public/theme-init.js'), 'utf8'), {
+    document,
+    networkToolbox: exposed,
+    localStorage: { getItem: () => 'dark' },
+    matchMedia: () => ({ matches: true }),
+  });
+  assert.equal(document.documentElement.dataset.theme, 'light');
 });

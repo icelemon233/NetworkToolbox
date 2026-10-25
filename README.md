@@ -10,13 +10,13 @@ A Windows network toolbox for Wi-Fi channel analysis, connection diagnostics, th
 
 [Download the Windows release](https://github.com/icelemon233/NetworkToolbox/releases/latest).
 
-The v0.2.3 installer includes the Cinna welcome, page header and uninstall artwork.
+The v1.0.0 installer includes the Cinna welcome, page header and uninstall artwork.
 
 Windows 11 x64 is required. The portable application and installer include Electron and a self-contained .NET worker; end users do not need Node.js or a .NET installation.
 
 - `NetworkToolbox-<version>-Portable.exe`: run directly.
 - `NetworkToolbox-Setup-<version>.exe`: install with a choice of destination.
-- Closing the window keeps tasks in the tray by default. In v0.2.2, settings also offer exit on close. Choose **退出应用** in settings or **退出** in the tray menu to exit.
+- Closing the window keeps tasks in the tray by default. In v1.0.0, settings also offer exit on close. Choose **退出应用** in settings or **退出** in the tray menu to exit.
 
 Opening the app reads local interfaces and the Windows Wi-Fi cache. Active Wi-Fi scans, Internet tests, subnet discovery and background monitoring start when requested.
 

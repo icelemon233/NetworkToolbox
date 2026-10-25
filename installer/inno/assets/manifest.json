@@ -1,0 +1,32 @@
+{
+  "product": "NetworkToolbox",
+  "kind": "network",
+  "edition": "2026-10",
+  "origin": "Cinna installer scenes, generated from the approved character and composition references",
+  "files": [
+    {
+      "path": "source-day.png",
+      "width": 1610,
+      "height": 977,
+      "sha256": "4b6b1bdd7fc4f7a2e2053fab95cee6ed133d29b5dd55c93885417e15218cd317"
+    },
+    {
+      "path": "scene-day.jpg",
+      "width": 1610,
+      "height": 977,
+      "sha256": "62d541da7e168dc5a4349e11bbb39193bd50d69e5301c3a8b3977218f595d6fc"
+    },
+    {
+      "path": "source-night.png",
+      "width": 1610,
+      "height": 977,
+      "sha256": "bcd9a4132d174331a2007061fc9c8be4d4d989a0355021fe8dd443d89c53a9da"
+    },
+    {
+      "path": "scene-night.jpg",
+      "width": 1610,
+      "height": 977,
+      "sha256": "659811872a2ae8375ebc2b3cd92d664a12df7fee48f2d6b3a0150097de51860c"
+    }
+  ]
+}

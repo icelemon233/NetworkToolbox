@@ -57,3 +57,4 @@ export const bridge: Bridge = {
 };
 export const isPreview = preview;
 export const isDesktop = Boolean(window.networkToolbox);
+export const isUiQa = window.networkToolbox?.uiQa === true;
